@@ -1,0 +1,695 @@
+import type { Express } from "express";
+import { createServer, type Server } from "http";
+import { storage } from "./storage";
+import { insertPropertySchema, insertOfferSchema, insertContractSchema, insertNotificationSchema, insertConversationSchema, insertMessageSchema, insertReviewSchema, contracts, users, conversations, messages, reviews, properties, offers } from "@shared/schema";
+import { db } from "./db";
+import { eq, desc, and } from "drizzle-orm";
+import { z } from "zod";
+
+// Alias tables for clarity in joins
+const offersTable = offers;
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  // Properties routes
+  app.get("/api/properties", async (req, res) => {
+    try {
+      const ownerId = req.query.ownerId ? parseInt(req.query.ownerId as string) : undefined;
+      const properties = await storage.getProperties(ownerId);
+      res.json(properties);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch properties" });
+    }
+  });
+
+  app.get("/api/properties/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const property = await storage.getProperty(id);
+      if (!property) {
+        return res.status(404).json({ error: "Property not found" });
+      }
+      res.json(property);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch property" });
+    }
+  });
+
+  app.post("/api/properties", async (req, res) => {
+    try {
+      const validatedData = insertPropertySchema.parse(req.body);
+      const property = await storage.createProperty(validatedData);
+      res.status(201).json(property);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid property data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create property" });
+    }
+  });
+
+  app.put("/api/properties/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updates = req.body;
+      const property = await storage.updateProperty(id, updates);
+      if (!property) {
+        return res.status(404).json({ error: "Property not found" });
+      }
+      res.json(property);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update property" });
+    }
+  });
+
+  // Offers routes
+  app.get("/api/offers", async (req, res) => {
+    try {
+      const userId = parseInt(req.query.userId as string);
+      const userType = req.query.userType as string;
+      
+      console.log(`Fetching offers for userId: ${userId}, userType: ${userType}`);
+      
+      let offers;
+      if (userType === 'owner') {
+        // Owners see offers received for their properties
+        offers = await db.select({
+          id: offersTable.id,
+          propertyId: offersTable.propertyId,
+          tenantId: offersTable.tenantId,
+          ownerId: offersTable.ownerId,
+          startDate: offersTable.startDate,
+          endDate: offersTable.endDate,
+          monthlyRent: offersTable.monthlyRent,
+          deposit: offersTable.deposit,
+          conditions: offersTable.conditions,
+          status: offersTable.status,
+          createdAt: offersTable.createdAt,
+          updatedAt: offersTable.updatedAt,
+          property: {
+            title: properties.title,
+            address: properties.address,
+          },
+          tenant: {
+            firstName: users.firstName,
+            lastName: users.lastName,
+            email: users.email,
+          }
+        })
+        .from(offersTable)
+        .leftJoin(properties, eq(offersTable.propertyId, properties.id))
+        .leftJoin(users, eq(offersTable.tenantId, users.id))
+        .where(eq(offersTable.ownerId, userId))
+        .orderBy(desc(offersTable.createdAt));
+      } else {
+        // Tenants see offers they sent
+        offers = await db.select({
+          id: offersTable.id,
+          propertyId: offersTable.propertyId,
+          tenantId: offersTable.tenantId,
+          ownerId: offersTable.ownerId,
+          startDate: offersTable.startDate,
+          endDate: offersTable.endDate,
+          monthlyRent: offersTable.monthlyRent,
+          deposit: offersTable.deposit,
+          conditions: offersTable.conditions,
+          status: offersTable.status,
+          createdAt: offersTable.createdAt,
+          updatedAt: offersTable.updatedAt,
+          property: {
+            title: properties.title,
+            address: properties.address,
+          },
+          owner: {
+            firstName: users.firstName,
+            lastName: users.lastName,
+            email: users.email,
+          }
+        })
+        .from(offersTable)
+        .leftJoin(properties, eq(offersTable.propertyId, properties.id))
+        .leftJoin(users, eq(offersTable.ownerId, users.id))
+        .where(eq(offersTable.tenantId, userId))
+        .orderBy(desc(offersTable.createdAt));
+      }
+      
+      console.log(`Found ${offers.length} offers for user ${userId} (${userType})`);
+      res.json(offers);
+    } catch (error) {
+      console.error("Failed to fetch offers:", error);
+      res.status(500).json({ error: "Failed to fetch offers" });
+    }
+  });
+
+  app.post("/api/offers", async (req, res) => {
+    try {
+      const validatedData = insertOfferSchema.parse(req.body);
+      
+      // Check how many offers this tenant has made for this property
+      const existingOffers = await storage.getOffersByTenantAndProperty(validatedData.tenantId, validatedData.propertyId);
+      
+      if (existingOffers.length >= 3) {
+        return res.status(400).json({ error: "Maximum 3 offers allowed per property" });
+      }
+      
+      // If this is the 2nd or 3rd offer, mark as reminder
+      const isReminder = existingOffers.length >= 1;
+      
+      const offer = await storage.createOffer(validatedData);
+      
+      // Get property details for notifications
+      const property = await storage.getProperty(validatedData.propertyId);
+      
+      // Notify owner about new offer
+      const notificationTitle = isReminder ? "Nouvelle offre (rappel)" : "Nouvelle offre reçue";
+      const notificationMessage = isReminder 
+        ? `Un locataire a envoyé une nouvelle offre (rappel ${existingOffers.length + 1}/3) pour votre propriété ${property?.title || ''}.`
+        : `Un locataire a envoyé une offre pour votre propriété ${property?.title || ''}.`;
+      
+      await storage.createNotification({
+        userId: validatedData.ownerId,
+        title: notificationTitle,
+        message: notificationMessage,
+        type: "offer",
+        relatedId: offer.id,
+      });
+
+      // Notify tenant about their sent offer
+      await storage.createNotification({
+        userId: validatedData.tenantId,
+        title: "Nouvelle offre envoyée",
+        message: `Vous avez envoyé une offre au propriétaire pour ${property?.title || 'la propriété'}.`,
+        type: "offer",
+        relatedId: offer.id,
+      });
+      
+      res.status(201).json(offer);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid offer data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create offer" });
+    }
+  });
+
+  // Update offer status
+  app.put("/api/offers/:id/status", async (req, res) => {
+    try {
+      const offerId = parseInt(req.params.id);
+      const { status } = req.body;
+      const offer = await storage.updateOfferStatus(offerId, status);
+      if (!offer) {
+        return res.status(404).json({ error: "Offer not found" });
+      }
+      res.json(offer);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update offer status" });
+    }
+  });
+
+  // Request contract for accepted offer
+  app.put("/api/offers/:id/request-contract", async (req, res) => {
+    try {
+      const offerId = parseInt(req.params.id);
+      const offer = await storage.updateOfferStatus(offerId, "contract_requested");
+      if (!offer) {
+        return res.status(404).json({ error: "Offer not found" });
+      }
+      
+      // Create notification for owner
+      await storage.createNotification({
+        userId: offer.ownerId,
+        title: "Demande de contrat",
+        message: "Un locataire a demandé un contrat pour une offre acceptée.",
+        type: "contract_request",
+        relatedId: offerId,
+      });
+      
+      res.json(offer);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to request contract" });
+    }
+  });
+
+  app.put("/api/offers/:id/status", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { status } = req.body;
+      const offer = await storage.updateOfferStatus(id, status);
+      
+      if (!offer) {
+        return res.status(404).json({ error: "Offer not found" });
+      }
+
+      // Create notification for tenant
+      const notificationMessage = status === 'accepted' ? 
+        "Votre offre a été acceptée! Vous pouvez maintenant demander un contrat." : 
+        "Votre offre a été refusée";
+
+      await storage.createNotification({
+        userId: offer.tenantId,
+        title: status === 'accepted' ? "Offre acceptée" : "Offre refusée",
+        message: notificationMessage,
+        type: "offer",
+        relatedId: offer.id,
+      });
+
+      res.json(offer);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update offer status" });
+    }
+  });
+
+  // Contract request endpoint (tenant requests contract after accepted offer)
+  app.put("/api/offers/:id/request-contract", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const offer = await storage.updateOfferStatus(id, "contract_requested");
+      
+      if (!offer) {
+        return res.status(404).json({ error: "Offer not found" });
+      }
+
+      // Create notification for owner
+      await storage.createNotification({
+        userId: offer.ownerId,
+        title: "Demande de contrat",
+        message: "Un locataire demande la création d'un contrat pour son offre acceptée",
+        type: "contract_request",
+        relatedId: offer.id,
+      });
+
+      res.json(offer);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to request contract" });
+    }
+  });
+
+  // Contracts routes
+  app.get("/api/contracts", async (req, res) => {
+    try {
+      const userId = parseInt(req.query.userId as string);
+      const ownerOnly = req.query.ownerOnly === 'true';
+      
+      const contracts = ownerOnly ? 
+        await storage.getOwnerContracts(userId) : 
+        await storage.getContracts(userId);
+      res.json(contracts);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch contracts" });
+    }
+  });
+
+  app.get("/api/contracts/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const contract = await storage.getContract(id);
+      if (!contract) {
+        return res.status(404).json({ error: "Contract not found" });
+      }
+      res.json(contract);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch contract" });
+    }
+  });
+
+  app.post("/api/contracts", async (req, res) => {
+    try {
+      console.log("Received contract data:", req.body);
+      const validatedData = insertContractSchema.parse(req.body);
+      
+      // Verify that the offer exists and is in contract_requested status
+      const offer = await storage.getOffer(validatedData.offerId);
+      if (!offer) {
+        return res.status(400).json({ error: "Offer not found" });
+      }
+      if (offer.status !== "contract_requested") {
+        return res.status(400).json({ error: "Contract can only be created for requested offers" });
+      }
+      
+      const contract = await storage.createContract(validatedData);
+      
+      // Create notification for tenant
+      await storage.createNotification({
+        userId: contract.tenantId,
+        title: "Contrat créé",
+        message: "Un contrat a été créé pour votre offre. Attendez la signature du propriétaire.",
+        type: "contract",
+        relatedId: contract.id,
+      });
+
+      res.status(201).json(contract);
+    } catch (error) {
+      console.error("Contract creation error:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid contract data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create contract", details: (error as Error).message });
+    }
+  });
+
+  app.put("/api/contracts/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updates = req.body;
+      
+      // Check if contract exists and can be modified
+      const existingContract = await storage.getContract(id);
+      if (!existingContract) {
+        return res.status(404).json({ error: "Contract not found" });
+      }
+      
+      // Only allow modifications if tenant hasn't signed yet
+      if (existingContract.tenantSignature) {
+        return res.status(400).json({ error: "Cannot modify contract after tenant signature" });
+      }
+      
+      // Reset owner signature if contract data is modified
+      const resetSignature = {
+        ownerSignature: null,
+        ownerSignedAt: null,
+        tenantSignDeadline: null,
+        status: 'draft'
+      };
+      
+      const contract = await storage.updateContract(id, { ...updates, ...resetSignature });
+      res.json(contract);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update contract" });
+    }
+  });
+
+  app.put("/api/contracts/:id/sign", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { signatureType, signatureData } = req.body;
+      
+      if (!['owner', 'tenant'].includes(signatureType)) {
+        return res.status(400).json({ error: "Invalid signature type" });
+      }
+
+      const contract = await storage.updateContractSignature(id, signatureType, signatureData);
+      
+      if (!contract) {
+        return res.status(404).json({ error: "Contract not found" });
+      }
+
+      // Handle owner signature - set 3-day deadline for tenant
+      if (signatureType === 'owner' && contract.status === 'owner_signed') {
+        // Set tenant sign deadline to 3 days from now
+        const deadline = new Date();
+        deadline.setDate(deadline.getDate() + 3);
+        await storage.updateContractDeadline(id, deadline);
+
+        // Notify tenant with deadline
+        await storage.createNotification({
+          userId: contract.tenantId,
+          title: "Nouveau contrat à signer",
+          message: `Le propriétaire a signé le contrat. Vous avez 3 jours pour le signer avant expiration (deadline: ${deadline.toLocaleDateString('fr-FR')})`,
+          type: "contract_signature_required",
+          relatedId: contract.id,
+        });
+      }
+
+      // Handle tenant signature - activate contract and update property
+      if (signatureType === 'tenant' && contract.status === 'fully_signed') {
+        // Check if tenant signed within deadline
+        const currentContract = await storage.getContract(id);
+        if (currentContract?.tenantSignDeadline && new Date() > new Date(currentContract.tenantSignDeadline)) {
+          return res.status(400).json({ error: "Contract expired. Signing deadline has passed." });
+        }
+
+        // Check for other active contracts on this property
+        const existingActiveContract = await storage.getActiveContractForProperty(contract.propertyId);
+        if (existingActiveContract) {
+          return res.status(400).json({ error: "This property already has an active contract." });
+        }
+
+        // Activate contract and update property status
+        await storage.updateContractStatus(id, 'active');
+        await storage.updatePropertyStatus(contract.propertyId, 'Loué');
+
+        // Notify owner that contract is fully signed and active
+        await storage.createNotification({
+          userId: contract.ownerId,
+          title: "Contrat activé",
+          message: "Le locataire a signé le contrat. Le contrat est maintenant actif et la propriété est marquée comme louée.",
+          type: "contract_active",
+          relatedId: contract.id,
+        });
+      }
+
+      res.json(contract);
+    } catch (error) {
+      console.error("Contract signing error:", error);
+      res.status(500).json({ error: "Failed to sign contract" });
+    }
+  });
+
+  // Notifications routes
+  app.get("/api/notifications", async (req, res) => {
+    try {
+      const userId = parseInt(req.query.userId as string);
+      const notifications = await storage.getNotifications(userId);
+      res.json(notifications);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch notifications" });
+    }
+  });
+
+  app.put("/api/notifications/:id/read", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const success = await storage.markNotificationRead(id);
+      if (!success) {
+        return res.status(404).json({ error: "Notification not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to mark notification as read" });
+    }
+  });
+
+  app.put("/api/notifications/:id/read", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const success = await storage.markNotificationRead(id);
+      if (!success) {
+        return res.status(404).json({ error: "Notification not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to mark notification as read" });
+    }
+  });
+
+  // Contract expiration check endpoint
+  app.post("/api/contracts/expire-check", async (req, res) => {
+    try {
+      await storage.expireContracts();
+      res.json({ success: true, message: "Contract expiration check completed" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to check contract expiration" });
+    }
+  });
+
+  // Contract modification
+  app.put("/api/contracts/:id/modify", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { contractData } = req.body;
+      
+      const contract = await storage.getContract(id);
+      if (!contract) {
+        return res.status(404).json({ error: "Contract not found" });
+      }
+
+      // Only allow modification if contract is not fully signed yet
+      if (contract.status === 'active') {
+        return res.status(400).json({ error: "Cannot modify an active contract" });
+      }
+
+      // Reset signatures if contract data is modified
+      const [updated] = await db
+        .update(contracts)
+        .set({ 
+          contractData, 
+          ownerSignature: null, 
+          tenantSignature: null,
+          ownerSignedAt: null,
+          tenantSignedAt: null,
+          status: 'draft',
+          tenantSignDeadline: null,
+          updatedAt: new Date() 
+        })
+        .where(eq(contracts.id, id))
+        .returning();
+
+      // Notify both parties about the modification
+      await storage.createNotification({
+        userId: contract.ownerId,
+        title: "Contrat modifié",
+        message: "Le contrat a été modifié. Veuillez le réviser et le signer à nouveau.",
+        type: "contract_modified",
+        relatedId: contract.id,
+      });
+
+      await storage.createNotification({
+        userId: contract.tenantId,
+        title: "Contrat modifié",
+        message: "Le contrat a été modifié par le propriétaire. Les signatures précédentes ont été supprimées.",
+        type: "contract_modified",
+        relatedId: contract.id,
+      });
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Contract modification error:", error);
+      res.status(500).json({ error: "Failed to modify contract" });
+    }
+  });
+
+  // Contract PDF download
+  app.get("/api/contracts/:id/download", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const contract = await storage.getContract(id);
+      
+      if (!contract) {
+        return res.status(404).json({ error: "Contract not found" });
+      }
+
+      // Only allow download if contract is fully signed
+      if (contract.status !== 'active' && contract.status !== 'fully_signed') {
+        return res.status(400).json({ error: "Contract must be fully signed to download" });
+      }
+
+      // Generate PDF URL (in real implementation, this would generate/retrieve actual PDF)
+      const pdfUrl = `/api/contracts/${id}/pdf`;
+      
+      res.json({ 
+        downloadUrl: pdfUrl,
+        filename: `contrat_${id}_${(contract.contractData as any)?.propertyTitle?.replace(/\s+/g, '_') || 'property'}.pdf`
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to generate download link" });
+    }
+  });
+
+  // Users routes
+  app.get("/api/users/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [user] = await db.select().from(users).where(eq(users.id, id));
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      // Don't send password in response
+      const { password, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch user" });
+    }
+  });
+
+  // Conversations routes
+  app.post("/api/conversations", async (req, res) => {
+    try {
+      const { propertyId, tenantId, ownerId, message } = req.body;
+      
+      // Check if conversation already exists
+      let [existingConversation] = await db.select()
+        .from(conversations)
+        .where(and(
+          eq(conversations.propertyId, propertyId),
+          eq(conversations.tenantId, tenantId),
+          eq(conversations.ownerId, ownerId)
+        ));
+
+      if (!existingConversation) {
+        // Create new conversation
+        [existingConversation] = await db.insert(conversations)
+          .values({ propertyId, tenantId, ownerId })
+          .returning();
+      }
+
+      // Add message to conversation
+      await db.insert(messages).values({
+        conversationId: existingConversation.id,
+        senderId: tenantId,
+        content: message,
+      });
+
+      // Update last message timestamp
+      await db.update(conversations)
+        .set({ lastMessageAt: new Date() })
+        .where(eq(conversations.id, existingConversation.id));
+
+      res.json({ success: true, conversationId: existingConversation.id });
+    } catch (error) {
+      console.error("Conversation error:", error);
+      res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
+  app.get("/api/conversations/:id/messages", async (req, res) => {
+    try {
+      const conversationId = parseInt(req.params.id);
+      const messagesList = await db.select()
+        .from(messages)
+        .where(eq(messages.conversationId, conversationId))
+        .orderBy(messages.createdAt);
+      res.json(messagesList);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch messages" });
+    }
+  });
+
+  // Reviews routes
+  app.get("/api/properties/:id/reviews", async (req, res) => {
+    try {
+      const propertyId = parseInt(req.params.id);
+      const reviewsList = await db.select()
+        .from(reviews)
+        .where(eq(reviews.propertyId, propertyId))
+        .orderBy(desc(reviews.createdAt));
+      res.json(reviewsList);
+    } catch (error) {
+      console.error("Reviews fetch error:", error);
+      res.json([]); // Return empty array instead of error
+    }
+  });
+
+  app.post("/api/reviews", async (req, res) => {
+    try {
+      const validatedData = insertReviewSchema.parse(req.body);
+      const [review] = await db.insert(reviews).values(validatedData).returning();
+      res.status(201).json(review);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid review data", details: error.errors });
+      }
+      console.error("Review creation error:", error);
+      res.status(500).json({ error: "Failed to create review" });
+    }
+  });
+
+  // Mock authentication route (replace with real auth later)
+  app.post("/api/auth/login", async (req, res) => {
+    const { username, password } = req.body;
+    
+    // Mock user for testing
+    const mockUser = {
+      id: 1,
+      username: "test_user",
+      userType: "tenant",
+      email: "test@example.com",
+      firstName: "Test",
+      lastName: "User",
+    };
+    
+    res.json({ user: mockUser, token: "mock-token" });
+  });
+
+  const httpServer = createServer(app);
+  return httpServer;
+}

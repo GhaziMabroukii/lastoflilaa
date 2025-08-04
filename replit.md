@@ -1,0 +1,109 @@
+# replit.md
+
+## Overview
+
+Ekrili is a modern property rental platform specifically designed for the Tunisian market, focusing on students and families. The application features intelligent search capabilities with geolocation, real-time messaging, secure contract management, and flexible pricing models. Built as a full-stack web application using React frontend with Express.js backend, it provides comprehensive property management, user authentication, and integrated communication tools.
+
+## User Preferences
+
+Preferred communication style: Simple, everyday language.
+
+## System Architecture
+
+### Frontend Architecture
+- **Framework**: React 18 with TypeScript in SPA (Single Page Application) architecture
+- **Routing**: Wouter for lightweight client-side routing
+- **State Management**: TanStack React Query for server state management
+- **UI Components**: shadcn/ui component library built on Radix UI primitives
+- **Styling**: Tailwind CSS with custom design system featuring glassmorphism effects and Tunisian-inspired color palette
+- **Build Tool**: Vite for fast development and optimized production builds
+
+### Backend Architecture
+- **Runtime**: Node.js with Express.js framework
+- **Language**: TypeScript with ES modules
+- **Architecture Pattern**: RESTful API with modular route organization
+- **Storage Interface**: Abstracted storage layer with in-memory implementation for development
+- **Development Setup**: Hot module replacement with Vite integration for seamless full-stack development
+
+### Database Layer
+- **ORM**: Drizzle ORM for type-safe database operations
+- **Schema Management**: Centralized schema definitions in `/shared` directory
+- **Validation**: Zod integration for runtime type validation
+- **Migration System**: Drizzle Kit for database schema migrations
+
+### Authentication & Authorization
+- **Client-side**: localStorage-based session management
+- **User Types**: Role-based system supporting tenants and property owners
+- **Profile Management**: Comprehensive user profiles with verification badges
+
+### UI/UX Design System
+- **Design Philosophy**: Neo-brutalism with glassmorphism elements
+- **Color Scheme**: HSL-based system with Tunisian cultural influences (warm orange-red primary, Mediterranean blue secondary)
+- **Typography**: Modern sans-serif with gradient text effects
+- **Components**: Consistent design language across form inputs, buttons, cards, and navigation elements
+
+### Key Features Architecture
+- **Property Management**: CRUD operations with image upload, amenities tracking, and availability management
+- **Search System**: Advanced filtering with geolocation, price ranges, and category-based search
+- **Messaging**: Real-time chat interface with message history and file sharing capabilities
+- **Contract Management**: French legal contract creation with CIN fields, electronic signatures (owner first, then tenant), and proper tenant identification using name/email/phone
+- **Notification System**: User preference-based notification settings with multiple delivery channels
+
+### Recent Contract Updates (August 2025)
+- **Complete Workflow Implementation**: Full contract lifecycle from creation to activation with real-time notifications
+- **3-Day Expiration System**: Automatic contract expiration if tenant doesn't sign within 3 days of owner signature
+- **Real-time Notifications**: Live notification system with 5-second polling for instant updates between owner and tenant
+- **Property Status Automation**: Properties automatically switch from "Disponible" to "Loué" when contracts become active
+- **Contract Modification**: Full contract editing capability with signature reset and notifications to both parties
+- **PDF Download**: Secure PDF generation for fully signed contracts with unique filenames
+- **Duplicate Prevention**: System prevents multiple active contracts for the same property
+- **Scheduled Cleanup**: Hourly background job to automatically expire overdue contracts and reset property status
+- **French Legal Structure**: Contracts follow authentic French rental agreement format with CIN fields
+- **Enhanced Status Management**: Comprehensive status tracking (draft, owner_signed, fully_signed, active, expired, cancelled)
+
+### Proper Offer-to-Contract Workflow (August 2025)
+- **Secure Contract Creation**: Only owners can create contracts, only after receiving contract requests from tenants
+- **Offer Management**: Complete offers page for both sent and received offers with status tracking
+- **Contract Request System**: Tenants can request contracts only after their offers are accepted by owners
+- **Role-Based Access**: Tenants cannot create contracts directly, ensuring proper business logic flow
+- **Notification Integration**: Real-time notifications for offer acceptance, contract requests, and contract creation
+- **Navigation Integration**: Offers page integrated into main navigation for easy access
+
+### Role-Based UI & Notifications (August 2025)
+- **Tenant Experience**: "Faire une offre" button only visible to tenants on property details
+- **Owner Experience**: "Faire une offre" button hidden for property owners
+- **Context-Specific Notifications**: Tenants receive "Nouvelle offre envoyée" notifications, owners receive "Nouvelle offre reçue"
+- **Navigation Labels**: Owners see "Mes offres reçues", tenants see "Mes offres envoyées"
+- **API Filtering**: Proper user-type based offer filtering ensures correct data display for each role
+- **Dual Notifications**: Both tenant and owner receive appropriate notifications when offers are created
+
+## External Dependencies
+
+### Core Framework Dependencies
+- **React Ecosystem**: React 18, React DOM, React Router (Wouter)
+- **State Management**: TanStack React Query for server state caching and synchronization
+- **Form Handling**: React Hook Form with Hookform Resolvers for validation
+
+### UI Component Libraries
+- **Radix UI**: Complete set of unstyled, accessible components including dialogs, dropdowns, tooltips, and form elements
+- **Styling**: Tailwind CSS, PostCSS, Autoprefixer
+- **Icons**: Lucide React for consistent iconography
+- **Utilities**: clsx and tailwind-merge for conditional CSS classes, class-variance-authority for component variants
+
+### Database & Backend
+- **Database**: PostgreSQL with Neon Database serverless driver
+- **ORM**: Drizzle ORM with Drizzle Kit for migrations
+- **Validation**: Zod for schema validation and Drizzle-Zod integration
+- **Session Management**: connect-pg-simple for PostgreSQL session storage
+
+### Development Tools
+- **Build System**: Vite with React plugin and runtime error overlay
+- **TypeScript**: Full TypeScript support across frontend and backend
+- **Development Experience**: Replit-specific plugins for enhanced development workflow
+- **Date Handling**: date-fns for date manipulation and formatting
+
+### Specialized Features
+- **Carousel**: Embla Carousel React for image galleries
+- **Command Interface**: cmdk for search and command functionality
+- **Digital Signatures**: React Signature Canvas for contract signing
+- **Utility Libraries**: nanoid for unique ID generation, various utility functions for common operations
