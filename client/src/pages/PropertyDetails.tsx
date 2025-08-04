@@ -14,7 +14,7 @@ import { insertOfferSchema } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { z } from "zod";
-import { MapPin, Home, Bed, Bath, Phone, MessageCircle, Banknote, ArrowLeft, Star, Heart, Share, Calendar, Users, Wifi, Car, Utensils, Tv, Wind, Droplets, ChevronLeft, ChevronRight, ExternalLink, Map, StarIcon } from "lucide-react";
+import { MapPin, Home, Bed, Bath, Phone, MessageCircle, Banknote, ArrowLeft, Star, Heart, Share, Calendar, Users, Wifi, Car, Utensils, Tv, Wind, Droplets, ChevronLeft, ChevronRight, ExternalLink, Map, StarIcon, Clock, CheckCircle, XCircle, FileText } from "lucide-react";
 import Header from "@/components/Header";
 
 
@@ -63,6 +63,17 @@ export default function PropertyDetails() {
     enabled: propertyId > 0,
   });
 
+  // Fetch existing offers for this property and tenant
+  const { data: existingOffers = [] } = useQuery({
+    queryKey: ["/api/offers", "tenant", propertyId, currentUser.id],
+    queryFn: async () => {
+      const response = await fetch(`/api/offers?userId=${currentUser.id}&userType=tenant`);
+      const allOffers = await response.json();
+      return allOffers.filter((offer: any) => offer.propertyId === propertyId);
+    },
+    enabled: propertyId > 0 && currentUser.userType === "tenant",
+  });
+
   const form = useForm({
     resolver: zodResolver(z.object({
       propertyId: z.number(),
@@ -105,6 +116,7 @@ export default function PropertyDetails() {
       setIsOfferDialogOpen(false);
       form.reset();
       queryClient.invalidateQueries({ queryKey: ["/api/offers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/offers", "tenant", propertyId, currentUser.id] });
     },
     onError: () => {
       toast({
@@ -137,6 +149,27 @@ export default function PropertyDetails() {
       toast({
         title: "Erreur",
         description: "Impossible d'envoyer le message. Veuillez réessayer.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const requestContractMutation = useMutation({
+    mutationFn: (offerId: number) => apiRequest(`/api/offers/${offerId}/request-contract`, {
+      method: "PUT",
+    }),
+    onSuccess: () => {
+      toast({
+        title: "Contrat demandé",
+        description: "Votre demande de contrat a été envoyée au propriétaire!",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/offers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/offers", "tenant", propertyId, currentUser.id] });
+    },
+    onError: () => {
+      toast({
+        title: "Erreur",
+        description: "Impossible de demander le contrat. Veuillez réessayer.",
         variant: "destructive",
       });
     },
@@ -213,8 +246,18 @@ export default function PropertyDetails() {
     );
   }
 
+  // Check offer status for this property
+  const pendingOffer = existingOffers.find((offer: any) => offer.status === 'pending');
+  const acceptedOffer = existingOffers.find((offer: any) => offer.status === 'accepted');
+  const rejectedOffers = existingOffers.filter((offer: any) => offer.status === 'rejected');
+
   // Only tenants can make offers, and only if they're not the owner and property is available
-  const canMakeOffer = currentUser.userType === "tenant" && property && property.ownerId !== currentUser.id && property.status === "Disponible";
+  const canMakeOffer = currentUser.userType === "tenant" && 
+                      property && 
+                      property.ownerId !== currentUser.id && 
+                      property.status === "Disponible" && 
+                      !pendingOffer && 
+                      !acceptedOffer;
 
   const getAmenityIcon = (amenity: string) => {
     const amenityLower = amenity.toLowerCase();
@@ -587,7 +630,7 @@ export default function PropertyDetails() {
                 <CardTitle className="gradient-text">Contactez le propriétaire</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Make Offer Button */}
+                {/* Make Offer Button or Status Messages */}
                 {canMakeOffer && (
                   <Dialog open={isOfferDialogOpen} onOpenChange={setIsOfferDialogOpen}>
                     <DialogTrigger asChild>
@@ -676,6 +719,71 @@ export default function PropertyDetails() {
                       </Form>
                     </DialogContent>
                   </Dialog>
+                )}
+
+                {/* Pending Offer Status */}
+                {pendingOffer && (
+                  <div className="w-full p-4 rounded-lg bg-yellow-50 border border-yellow-200">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Clock className="h-4 w-4 text-yellow-600" />
+                      <span className="font-medium text-yellow-800">Offre en attente</span>
+                    </div>
+                    <p className="text-sm text-yellow-700">
+                      Votre offre est en attente de réponse du propriétaire.
+                    </p>
+                  </div>
+                )}
+
+                {/* Accepted Offer Status */}
+                {acceptedOffer && (
+                  <div className="w-full space-y-3">
+                    <div className="p-4 rounded-lg bg-green-50 border border-green-200">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                        <span className="font-medium text-green-800">Offre acceptée</span>
+                      </div>
+                      <p className="text-sm text-green-700">
+                        Félicitations! Votre offre a été acceptée.
+                      </p>
+                    </div>
+                    
+                    {acceptedOffer.status === 'accepted' && (
+                      <Button 
+                        className="w-full gradient-button" 
+                        size="lg"
+                        onClick={() => requestContractMutation.mutate(acceptedOffer.id)}
+                        disabled={requestContractMutation.isPending}
+                      >
+                        <FileText className="mr-2 h-4 w-4" />
+                        {requestContractMutation.isPending ? "Demande en cours..." : "Demander le contrat"}
+                      </Button>
+                    )}
+
+                    {acceptedOffer.status === 'contract_requested' && (
+                      <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <FileText className="h-4 w-4 text-blue-600" />
+                          <span className="font-medium text-blue-800">Contrat demandé</span>
+                        </div>
+                        <p className="text-sm text-blue-700">
+                          Votre demande de contrat a été envoyée au propriétaire.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Rejected Offer Status */}
+                {rejectedOffers.length > 0 && !pendingOffer && !acceptedOffer && (
+                  <div className="w-full p-4 rounded-lg bg-red-50 border border-red-200">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <XCircle className="h-4 w-4 text-red-600" />
+                      <span className="font-medium text-red-800">Offre refusée</span>
+                    </div>
+                    <p className="text-sm text-red-700">
+                      Votre dernière offre a été refusée. Vous pouvez faire une nouvelle offre.
+                    </p>
+                  </div>
                 )}
 
                 {/* Contact Buttons */}

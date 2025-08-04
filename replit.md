@@ -77,6 +77,14 @@ Preferred communication style: Simple, everyday language.
 - **API Filtering**: Proper user-type based offer filtering ensures correct data display for each role
 - **Dual Notifications**: Both tenant and owner receive appropriate notifications when offers are created
 
+### Complete Offer Workflow Implementation (August 2025)
+- **Duplicate Prevention**: Tenants cannot create multiple pending offers for the same property
+- **Real-time Status Updates**: Property details page shows offer status (pending, accepted, rejected) with appropriate UI states
+- **Smart Offer Management**: After rejection, tenants can create new offers; after acceptance, contract request workflow begins
+- **Contract Request Button**: Appears only when offer is accepted, allowing tenant to request contract creation
+- **Status-Based Notifications**: Both parties receive notifications for offer creation, acceptance, rejection, and contract requests
+- **Visual Status Indicators**: Color-coded status cards (yellow for pending, green for accepted, red for rejected, blue for contract requested)
+
 ## External Dependencies
 
 ### Core Framework Dependencies

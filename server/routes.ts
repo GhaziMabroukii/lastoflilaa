@@ -144,15 +144,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertOfferSchema.parse(req.body);
       
-      // Check how many offers this tenant has made for this property
+      // Check for existing pending offers for this property from this tenant
       const existingOffers = await storage.getOffersByTenantAndProperty(validatedData.tenantId, validatedData.propertyId);
+      const pendingOffers = existingOffers.filter(offer => offer.status === 'pending');
       
-      if (existingOffers.length >= 3) {
-        return res.status(400).json({ error: "Maximum 3 offers allowed per property" });
+      if (pendingOffers.length > 0) {
+        return res.status(400).json({ 
+          error: "Vous avez déjà une offre en attente pour cette propriété. Attendez la réponse du propriétaire." 
+        });
       }
-      
-      // If this is the 2nd or 3rd offer, mark as reminder
-      const isReminder = existingOffers.length >= 1;
       
       const offer = await storage.createOffer(validatedData);
       
@@ -160,15 +160,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const property = await storage.getProperty(validatedData.propertyId);
       
       // Notify owner about new offer
-      const notificationTitle = isReminder ? "Nouvelle offre (rappel)" : "Nouvelle offre reçue";
-      const notificationMessage = isReminder 
-        ? `Un locataire a envoyé une nouvelle offre (rappel ${existingOffers.length + 1}/3) pour votre propriété ${property?.title || ''}.`
-        : `Un locataire a envoyé une offre pour votre propriété ${property?.title || ''}.`;
-      
       await storage.createNotification({
         userId: validatedData.ownerId,
-        title: notificationTitle,
-        message: notificationMessage,
+        title: "Nouvelle offre reçue",
+        message: `Un locataire a envoyé une offre pour votre propriété ${property?.title || ''}.`,
         type: "offer",
         relatedId: offer.id,
       });
@@ -191,45 +186,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update offer status
-  app.put("/api/offers/:id/status", async (req, res) => {
-    try {
-      const offerId = parseInt(req.params.id);
-      const { status } = req.body;
-      const offer = await storage.updateOfferStatus(offerId, status);
-      if (!offer) {
-        return res.status(404).json({ error: "Offer not found" });
-      }
-      res.json(offer);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to update offer status" });
-    }
-  });
-
-  // Request contract for accepted offer
-  app.put("/api/offers/:id/request-contract", async (req, res) => {
-    try {
-      const offerId = parseInt(req.params.id);
-      const offer = await storage.updateOfferStatus(offerId, "contract_requested");
-      if (!offer) {
-        return res.status(404).json({ error: "Offer not found" });
-      }
-      
-      // Create notification for owner
-      await storage.createNotification({
-        userId: offer.ownerId,
-        title: "Demande de contrat",
-        message: "Un locataire a demandé un contrat pour une offre acceptée.",
-        type: "contract_request",
-        relatedId: offerId,
-      });
-      
-      res.json(offer);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to request contract" });
-    }
-  });
-
+  // Update offer status (owner accepts/declines offer)
   app.put("/api/offers/:id/status", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
@@ -240,18 +197,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Offer not found" });
       }
 
-      // Create notification for tenant
-      const notificationMessage = status === 'accepted' ? 
-        "Votre offre a été acceptée! Vous pouvez maintenant demander un contrat." : 
-        "Votre offre a été refusée";
+      // Create notifications for both parties
+      if (status === 'accepted') {
+        // Notify tenant about acceptance
+        await storage.createNotification({
+          userId: offer.tenantId,
+          title: "Offre acceptée",
+          message: "Votre offre a été acceptée! Vous pouvez maintenant demander un contrat.",
+          type: "offer",
+          relatedId: offer.id,
+        });
 
-      await storage.createNotification({
-        userId: offer.tenantId,
-        title: status === 'accepted' ? "Offre acceptée" : "Offre refusée",
-        message: notificationMessage,
-        type: "offer",
-        relatedId: offer.id,
-      });
+        // Notify owner about acceptance confirmation
+        await storage.createNotification({
+          userId: offer.ownerId,
+          title: "Offre acceptée",
+          message: "Vous avez accepté l'offre. Le locataire peut maintenant demander un contrat.",
+          type: "offer",
+          relatedId: offer.id,
+        });
+      } else if (status === 'rejected') {
+        // Notify tenant about rejection
+        await storage.createNotification({
+          userId: offer.tenantId,
+          title: "Offre refusée",
+          message: "Votre offre a été refusée. Vous pouvez faire une nouvelle offre.",
+          type: "offer",
+          relatedId: offer.id,
+        });
+
+        // Notify owner about rejection confirmation
+        await storage.createNotification({
+          userId: offer.ownerId,
+          title: "Offre refusée",
+          message: "Vous avez refusé l'offre.",
+          type: "offer",
+          relatedId: offer.id,
+        });
+      }
 
       res.json(offer);
     } catch (error) {
@@ -263,13 +246,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/offers/:id/request-contract", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const offer = await storage.updateOfferStatus(id, "contract_requested");
+      const offer = await storage.getOffer(id);
       
       if (!offer) {
         return res.status(404).json({ error: "Offer not found" });
       }
 
-      // Create notification for owner
+      if (offer.status !== 'accepted') {
+        return res.status(400).json({ error: "Offer must be accepted before requesting contract" });
+      }
+
+      const updatedOffer = await storage.updateOfferStatus(id, "contract_requested");
+
+      // Create notifications for both parties
       await storage.createNotification({
         userId: offer.ownerId,
         title: "Demande de contrat",
@@ -278,7 +267,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         relatedId: offer.id,
       });
 
-      res.json(offer);
+      await storage.createNotification({
+        userId: offer.tenantId,
+        title: "Contrat demandé",
+        message: "Votre demande de contrat a été envoyée au propriétaire",
+        type: "contract_request",
+        relatedId: offer.id,
+      });
+
+      res.json(updatedOffer);
     } catch (error) {
       res.status(500).json({ error: "Failed to request contract" });
     }
