@@ -78,12 +78,15 @@ Preferred communication style: Simple, everyday language.
 - **Dual Notifications**: Both tenant and owner receive appropriate notifications when offers are created
 
 ### Complete Offer Workflow Implementation (August 2025)
-- **Duplicate Prevention**: Tenants cannot create multiple pending offers for the same property
-- **Real-time Status Updates**: Property details page shows offer status (pending, accepted, rejected) with appropriate UI states
+- **Full Workflow Logic**: Complete implementation of tenant offer workflow - tenant views property → makes offer → owner accepts/rejects → tenant can request contract
+- **Duplicate Prevention**: Tenants cannot create multiple pending offers for the same property; system prevents duplicate pending offers
+- **Real-time Status Updates**: Property details page shows offer status (pending, accepted, rejected, contract requested) with appropriate UI states
 - **Smart Offer Management**: After rejection, tenants can create new offers; after acceptance, contract request workflow begins
 - **Contract Request Button**: Appears only when offer is accepted, allowing tenant to request contract creation
-- **Status-Based Notifications**: Both parties receive notifications for offer creation, acceptance, rejection, and contract requests
+- **Status-Based Notifications**: Both parties receive real-time notifications for offer creation, acceptance, rejection, and contract requests
 - **Visual Status Indicators**: Color-coded status cards (yellow for pending, green for accepted, red for rejected, blue for contract requested)
+- **Role-Based UI Logic**: Tenants see "Mes offres envoyées", owners see "Mes offres reçues" with proper filtering and display logic
+- **Proper Error Handling**: Server prevents duplicate offers with clear error messages and client-side validation
 
 ## External Dependencies
 

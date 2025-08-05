@@ -203,7 +203,9 @@ export default function Offers() {
           <div>
             <h1 className="text-3xl font-bold gradient-text">Mes Offres</h1>
             <p className="text-muted-foreground">
-              Gérez vos offres envoyées et reçues
+              {currentUser.userType === 'owner' 
+                ? 'Gérez vos offres reçues pour vos propriétés' 
+                : 'Suivez vos offres de location envoyées'}
             </p>
           </div>
         </div>
@@ -211,7 +213,7 @@ export default function Offers() {
         <div className="w-full">
           <div className="mb-6">
             <h2 className="text-2xl font-bold">
-              {currentUser.userType === 'owner' ? 'Offres reçues' : 'Mes offres envoyées'}
+              {currentUser.userType === 'owner' ? 'Mes offres reçues' : 'Mes offres envoyées'}
             </h2>
             <p className="text-muted-foreground">
               {currentUser.userType === 'owner' 
@@ -234,7 +236,7 @@ export default function Offers() {
               <p className="text-muted-foreground">
                 {currentUser.userType === 'owner' 
                   ? 'Vous n\'avez reçu aucune offre pour vos propriétés.' 
-                  : 'Vous n\'avez envoyé aucune offre pour le moment.'}
+                  : 'Vous n\'avez envoyé aucune offre pour le moment. Parcourez les propriétés disponibles pour faire des offres.'}
               </p>
             </div>
           ) : (
