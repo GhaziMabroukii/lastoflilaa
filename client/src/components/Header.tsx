@@ -31,8 +31,47 @@ const Header = () => {
     localStorage.removeItem("userEmail");
     localStorage.removeItem("userType");
     localStorage.removeItem("userProfile");
+    localStorage.removeItem("user");
     setIsAuthenticated(false);
     navigate("/");
+  };
+
+  const switchToTenant = () => {
+    const tenantUser = {
+      id: 2,
+      userType: "tenant",
+      username: "tenant1",
+      firstName: "Marie",
+      lastName: "Martin",
+      email: "tenant@test.com"
+    };
+    localStorage.setItem("user", JSON.stringify(tenantUser));
+    localStorage.setItem("isAuthenticated", "true");
+    localStorage.setItem("userEmail", "tenant@test.com");
+    localStorage.setItem("userType", "tenant");
+    setIsAuthenticated(true);
+    setUserEmail("tenant@test.com");
+    setUserType("tenant");
+    window.location.reload(); // Refresh to update all components
+  };
+
+  const switchToOwner = () => {
+    const ownerUser = {
+      id: 1,
+      userType: "owner",
+      username: "owner1",
+      firstName: "Pierre",
+      lastName: "Durand",
+      email: "owner@test.com"
+    };
+    localStorage.setItem("user", JSON.stringify(ownerUser));
+    localStorage.setItem("isAuthenticated", "true");
+    localStorage.setItem("userEmail", "owner@test.com");
+    localStorage.setItem("userType", "owner");
+    setIsAuthenticated(true);
+    setUserEmail("owner@test.com");
+    setUserType("owner");
+    window.location.reload(); // Refresh to update all components
   };
 
   return (
@@ -181,6 +220,19 @@ const Header = () => {
                      <User className="mr-2 h-4 w-4" />
                      Mon profil
                    </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {/* Development User Switcher */}
+                  <div className="p-2">
+                    <p className="text-xs text-muted-foreground mb-2">Test Users:</p>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={switchToTenant}>
+                        Tenant
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={switchToOwner}>
+                        Owner
+                      </Button>
+                    </div>
+                  </div>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout}>
                     <LogOut className="mr-2 h-4 w-4" />
