@@ -1,290 +1,210 @@
 import { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import Header from "@/components/Header";
-import ContractGenerator from "@/components/ContractGenerator";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, FileText, Send } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { 
+  FileText, 
+  ArrowLeft, 
+  User, 
+  Home, 
+  Calendar, 
+  DollarSign,
+  Send,
+  CheckCircle,
+  AlertCircle,
+  Info
+} from "lucide-react";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+import Header from "@/components/Header";
 
-const CreateContract = () => {
-  const [contractData, setContractData] = useState({
-    offerId: "",
-    propertyId: "",
-    tenantName: "",
-    tenantEmail: "",
-    tenantPhone: "",
-    tenantCin: "",
-    ownerCin: "",
-    ownerId: "1", // Mock owner ID - should come from auth
-    startDate: "",
-    endDate: "",
-    monthlyRent: "",
-    deposit: "",
-    conditions: ""
-  });
-  
-  const [showSignatureStep, setShowSignatureStep] = useState(false);
-  const [createdContract, setCreatedContract] = useState(null);
-  
+interface ContractRequest {
+  id: number;
+  propertyId: number;
+  tenantId: number;
+  ownerId: number;
+  startDate: string;
+  endDate: string;
+  monthlyRent: string;
+  deposit: string;
+  conditions: string;
+  status: string;
+  property: {
+    title: string;
+    address: string;
+  };
+  tenant: {
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+}
+
+export default function CreateContract() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Get current user from localStorage with reactive updates
-  const getCurrentUser = () => {
-    const user = localStorage.getItem("user");
-    if (user) {
-      return JSON.parse(user);
-    }
-    return {"id": 1, "userType": "owner"};
-  };
-  
-  const [currentUser, setCurrentUser] = useState(getCurrentUser());
-  
-  // Listen for storage changes to update user when switched
-  useEffect(() => {
-    const handleStorageChange = () => {
-      setCurrentUser(getCurrentUser());
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('focus', handleStorageChange);
-    const interval = setInterval(handleStorageChange, 1000);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('focus', handleStorageChange);
-      clearInterval(interval);
-    };
-  }, []);
-
-  // Sign contract mutation for owner signature during creation
-  const signContract = useMutation({
-    mutationFn: async (signatureData: any) => {
-      return await apiRequest(`/api/contracts/${createdContract?.id}/sign`, {
-        method: "PUT",
-        body: JSON.stringify(signatureData)
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/contracts/${createdContract?.id}`] });
-      toast({
-        title: "Contrat signé",
-        description: "Votre signature a été enregistrée. Le contrat est maintenant en attente de la signature du locataire."
-      });
-      // Force refresh the contract data and navigate
-      queryClient.removeQueries({ queryKey: [`/api/contracts/${createdContract?.id}`] });
-      queryClient.invalidateQueries({ queryKey: [`/api/contracts`] });
-      
-      // Navigate immediately after invalidation
-      navigate(`/contract/${createdContract?.id}`, { replace: true });
-    },
-    onError: (error) => {
-      toast({
-        title: "Erreur de signature",
-        description: "Impossible de signer le contrat. Veuillez réessayer.",
-        variant: "destructive"
-      });
-    }
+  const [selectedOfferId, setSelectedOfferId] = useState<number | null>(null);
+  const [contractData, setContractData] = useState({
+    landlordName: "",
+    landlordCin: "",
+    tenantName: "",
+    tenantCin: "",
+    propertyTitle: "",
+    propertyAddress: "",
+    startDate: "",
+    endDate: "",
+    monthlyRent: "",
+    deposit: "",
+    specialConditions: "",
+    paymentDueDate: "1", // Default to 1st of each month
   });
 
-  // Fetch accepted offers requesting contracts for the current owner
-  const { data: contractRequests = [], isLoading: isLoadingRequests } = useQuery({
-    queryKey: ["/api/offers", currentUser.id, "received"],
-    queryFn: () => apiRequest(`/api/offers?userId=${currentUser.id}&userType=owner`),
-    select: (data) => {
-      console.log("All offers for owner:", data);
-      const filtered = data.filter((offer: any) => offer.status === 'contract_requested');
-      console.log("Contract requests:", filtered);
-      return filtered;
+  // Get current user
+  const getCurrentUser = () => {
+    const user = localStorage.getItem("user");
+    return user ? JSON.parse(user) : { id: 1, userType: "owner" };
+  };
+
+  const [currentUser] = useState(getCurrentUser());
+
+  // Fetch contract requests (offers with status 'contract_requested')
+  const { data: contractRequests = [], isLoading } = useQuery({
+    queryKey: ["/api/offers", "contract_requests", currentUser.id],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        userId: currentUser.id.toString(),
+        userType: currentUser.userType,
+        status: "contract_requested"
+      });
+      const response = await fetch(`/api/offers?${params}`);
+      if (!response.ok) throw new Error('Failed to fetch contract requests');
+      const data = await response.json();
+      
+      // Filter for contract_requested status to be sure
+      return Array.isArray(data) ? data.filter((offer: any) => offer.status === 'contract_requested') : [];
     },
-    enabled: currentUser.userType === 'owner'
   });
 
   // Create contract mutation
   const createContract = useMutation({
-    mutationFn: async (contractData: any) => {
+    mutationFn: async (contractPayload: any) => {
       return await apiRequest("/api/contracts", {
         method: "POST",
-        body: JSON.stringify(contractData)
+        body: JSON.stringify(contractPayload),
       });
     },
-    onSuccess: (contract) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/contracts"] });
-      setCreatedContract(contract);
-      setShowSignatureStep(true);
+      queryClient.invalidateQueries({ queryKey: ["/api/offers"] });
       toast({
         title: "Contrat créé",
-        description: "Signez maintenant le contrat pour l'activer.",
+        description: "Le contrat a été créé avec succès. Vous pouvez maintenant le signer.",
       });
+      navigate("/contracts");
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: "Erreur",
-        description: "Impossible de créer le contrat. Veuillez réessayer.",
-        variant: "destructive"
+        description: error.message || "Impossible de créer le contrat",
+        variant: "destructive",
       });
     }
   });
 
-  useEffect(() => {
-    // Mock authentication check - should be replaced with real auth
-    const isAuth = true; // localStorage.getItem("isAuthenticated");
-    const userType = "owner"; // localStorage.getItem("userType");
-    
-    if (!isAuth) {
-      navigate("/login");
-      return;
-    }
-    
-    if (userType !== "owner") {
-      toast({
-        title: "Accès refusé",
-        description: "Seuls les propriétaires peuvent créer des contrats",
-        variant: "destructive",
+  // Handle offer selection
+  const handleOfferSelection = (offerId: string) => {
+    const selectedOffer = contractRequests.find((offer: ContractRequest) => offer.id === parseInt(offerId));
+    if (selectedOffer) {
+      setSelectedOfferId(selectedOffer.id);
+      setContractData({
+        ...contractData,
+        tenantName: `${selectedOffer.tenant.firstName} ${selectedOffer.tenant.lastName}`,
+        propertyTitle: selectedOffer.property.title,
+        propertyAddress: selectedOffer.property.address,
+        startDate: selectedOffer.startDate.split('T')[0], // Convert to YYYY-MM-DD format
+        endDate: selectedOffer.endDate.split('T')[0],
+        monthlyRent: selectedOffer.monthlyRent,
+        deposit: selectedOffer.deposit || selectedOffer.monthlyRent,
       });
-      navigate("/dashboard");
-      return;
     }
-  }, [navigate, toast]);
-
-  const handleInputChange = (field: string, value: string) => {
-    setContractData(prev => ({
-      ...prev,
-      [field]: value
-    }));
   };
 
-  // Show signature step after contract creation
-  if (showSignatureStep && createdContract) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="container mx-auto px-4 py-8">
-          <Button
-            variant="outline"
-            onClick={() => {
-              setShowSignatureStep(false);
-              setCreatedContract(null);
-            }}
-            className="mb-6 flex items-center space-x-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span>Retour</span>
-          </Button>
-
-          <div className="text-center mb-8">
-            <FileText className="h-12 w-12 mx-auto text-primary mb-4" />
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-              Signer le contrat
-            </h1>
-            <p className="text-muted-foreground mt-2">
-              Signez le contrat pour l'activer. Le locataire recevra ensuite une notification pour signer à son tour.
-            </p>
-          </div>
-
-          <ContractGenerator 
-            contract={createdContract}
-            onSign={(signatureData) => signContract.mutate(signatureData)}
-            isLoading={signContract.isPending}
-            currentUserId={1}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  const generateContract = () => {
-    if (!contractData.offerId || !contractData.tenantName || !contractData.tenantEmail ||
-        !contractData.tenantCin || !contractData.ownerCin ||
-        !contractData.startDate || !contractData.endDate || !contractData.monthlyRent) {
-      toast({
-        title: "Informations manquantes",
-        description: "Veuillez remplir tous les champs obligatoires",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const selectedOffer = contractRequests.find((offer: any) => offer.id.toString() === contractData.offerId);
+  // Handle form submission
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     
-    if (!selectedOffer) {
+    if (!selectedOfferId) {
       toast({
         title: "Erreur",
-        description: "Offre sélectionnée non trouvée",
-        variant: "destructive"
+        description: "Veuillez sélectionner une demande de contrat",
+        variant: "destructive",
       });
       return;
     }
 
+    if (!contractData.landlordName || !contractData.landlordCin || !contractData.tenantCin) {
+      toast({
+        title: "Erreur", 
+        description: "Veuillez remplir tous les champs obligatoires",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const selectedOffer = contractRequests.find((offer: ContractRequest) => offer.id === selectedOfferId);
+    if (!selectedOffer) return;
+
     const contractPayload = {
-      offerId: parseInt(contractData.offerId),
+      offerId: selectedOfferId,
       propertyId: selectedOffer.propertyId,
       tenantId: selectedOffer.tenantId,
       ownerId: selectedOffer.ownerId,
       contractData: {
-        propertyTitle: selectedOffer.property?.title || "Propriété",
-        propertyAddress: selectedOffer.property?.address || "Adresse",
-        landlordName: "Ahmed Ben Ali", // Should come from owner data
-        landlordCin: contractData.ownerCin,
-        tenantName: contractData.tenantName,
-        tenantEmail: contractData.tenantEmail,
-        tenantPhone: contractData.tenantPhone,
-        tenantCin: contractData.tenantCin,
-        startDate: contractData.startDate,
-        endDate: contractData.endDate,
-        monthlyRent: parseFloat(contractData.monthlyRent),
-        deposit: parseFloat(contractData.deposit || contractData.monthlyRent),
-        conditions: contractData.conditions
-      }
+        ...contractData,
+        createdAt: new Date().toISOString(),
+      },
     };
 
     createContract.mutate(contractPayload);
   };
 
-  if (contractRequests.length === 0) {
+  // Check authentication
+  useEffect(() => {
+    const isAuth = localStorage.getItem("isAuthenticated");
+    if (!isAuth) {
+      navigate("/login");
+      return;
+    }
+
+    if (currentUser.userType !== "owner") {
+      toast({
+        title: "Accès refusé",
+        description: "Seuls les propriétaires peuvent créer des contrats",
+        variant: "destructive",
+      });
+      navigate("/");
+      return;
+    }
+  }, [navigate, currentUser.userType]);
+
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
         <div className="container mx-auto px-4 py-8">
-          <div className="flex items-center mb-8">
-            <Button 
-              variant="ghost" 
-              onClick={() => navigate("/contracts")}
-              className="mr-4"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Retour
-            </Button>
-            <div>
-              <h1 className="text-3xl font-bold gradient-text flex items-center space-x-3">
-                <FileText className="h-8 w-8 text-primary" />
-                <span>Créer un nouveau contrat</span>
-              </h1>
-            </div>
-          </div>
-
-          <div className="text-center py-16">
-            <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">Aucune demande de contrat</h3>
-            <p className="text-muted-foreground mb-6">
-              Vous devez d'abord recevoir des offres acceptées où les locataires demandent un contrat.
-            </p>
-            <div className="flex gap-4 justify-center">
-              <Button onClick={() => navigate("/offers")}>
-                Voir mes offres reçues
-              </Button>
-              <Button variant="outline" onClick={() => navigate("/manage-properties")}>
-                Gérer mes propriétés
-              </Button>
-            </div>
+          <div className="flex items-center justify-center">
+            <div className="text-lg">Chargement des demandes de contrat...</div>
           </div>
         </div>
       </div>
@@ -296,285 +216,288 @@ const CreateContract = () => {
       <Header />
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex items-center mb-8">
-          <Button 
-            variant="ghost" 
-            onClick={() => navigate("/contracts")}
-            className="mr-4"
-          >
+        <div className="flex items-center space-x-4 mb-8">
+          <Button variant="outline" onClick={() => navigate("/contracts")}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Retour
           </Button>
           <div>
             <h1 className="text-3xl font-bold gradient-text flex items-center space-x-3">
               <FileText className="h-8 w-8 text-primary" />
-              <span>Créer un nouveau contrat</span>
+              <span>Créer un Contrat</span>
             </h1>
             <p className="text-muted-foreground">
-              Choisissez une demande de contrat pour commencer
+              Créez un contrat de location pour une demande acceptée
             </p>
           </div>
         </div>
 
-        {/* Contract Requests List */}
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-4">Demandes de contrat en attente</h2>
-          <div className="grid gap-4">
-            {contractRequests.map((offer: any) => (
-              <Card key={offer.id} className="cursor-pointer hover:shadow-md transition-shadow">
-                <CardContent className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h3 className="font-semibold">Propriété #{offer.propertyId}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Demande de locataire #{offer.tenantId}
-                      </p>
-                    </div>
-                    <Button 
-                      size="sm"
-                      onClick={() => {
-                        setContractData(prev => ({
-                          ...prev,
-                          offerId: offer.id.toString(),
-                          propertyId: offer.propertyId.toString(),
-                          startDate: offer.startDate.split('T')[0],
-                          endDate: offer.endDate.split('T')[0],
-                          monthlyRent: offer.monthlyRent.toString(),
-                          deposit: offer.deposit?.toString() || "",
-                        }));
-                      }}
+        {/* Contract Requests Info */}
+        {contractRequests.length === 0 ? (
+          <Card className="glass-card mb-8">
+            <CardContent className="p-8 text-center">
+              <AlertCircle className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <h3 className="text-lg font-semibold mb-2">Aucune demande de contrat</h3>
+              <p className="text-muted-foreground mb-4">
+                Vous devez d'abord recevoir des offres acceptées où les locataires demandent un contrat.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Le processus: Locataire fait une offre → Vous acceptez l'offre → Locataire demande un contrat → Vous pouvez créer le contrat
+              </p>
+              <Button onClick={() => navigate("/offers")} className="mt-4">
+                Voir mes offres
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* Available Contract Requests */}
+            <Card className="glass-card mb-8">
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Info className="h-5 w-5" />
+                  <span>Demandes de contrat disponibles ({contractRequests.length})</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4">
+                  {contractRequests.map((request: ContractRequest) => (
+                    <div
+                      key={request.id}
+                      className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                        selectedOfferId === request.id
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-primary/50"
+                      }`}
+                      onClick={() => handleOfferSelection(request.id.toString())}
                     >
-                      Créer le contrat
-                    </Button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm font-medium">Loyer mensuel</p>
-                      <p className="text-lg font-bold text-primary">{offer.monthlyRent} TND</p>
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <Home className="h-4 w-4" />
+                            <h4 className="font-semibold">{request.property.title}</h4>
+                            <Badge variant="outline">
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Contrat demandé
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-2">{request.property.address}</p>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                            <div className="flex items-center space-x-1">
+                              <User className="h-3 w-3" />
+                              <span>{request.tenant.firstName} {request.tenant.lastName}</span>
+                            </div>
+                            <div className="flex items-center space-x-1">
+                              <Calendar className="h-3 w-3" />
+                              <span>
+                                {format(new Date(request.startDate), "dd/MM/yyyy", { locale: fr })} - 
+                                {format(new Date(request.endDate), "dd/MM/yyyy", { locale: fr })}
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-1">
+                              <DollarSign className="h-3 w-3" />
+                              <span>{request.monthlyRent} TND/mois</span>
+                            </div>
+                          </div>
+                        </div>
+                        {selectedOfferId === request.id && (
+                          <CheckCircle className="h-5 w-5 text-primary" />
+                        )}
+                      </div>
                     </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Contract Form */}
+            {selectedOfferId && (
+              <form onSubmit={handleSubmit}>
+                <Card className="glass-card">
+                  <CardHeader>
+                    <CardTitle>Détails du Contrat</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {/* Owner Information */}
                     <div>
-                      <p className="text-sm font-medium">Période</p>
-                      <p className="text-sm">{new Date(offer.startDate).toLocaleDateString()} - {new Date(offer.endDate).toLocaleDateString()}</p>
+                      <h3 className="text-lg font-semibold mb-4">Informations du Propriétaire</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="landlordName">Nom complet *</Label>
+                          <Input
+                            id="landlordName"
+                            value={contractData.landlordName}
+                            onChange={(e) => setContractData({ ...contractData, landlordName: e.target.value })}
+                            placeholder="Nom et prénom du propriétaire"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="landlordCin">CIN *</Label>
+                          <Input
+                            id="landlordCin"
+                            value={contractData.landlordCin}
+                            onChange={(e) => setContractData({ ...contractData, landlordCin: e.target.value })}
+                            placeholder="Numéro de CIN"
+                            required
+                          />
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Contract Form */}
-          <Card className="glass-card">
-            <CardHeader>
-              <CardTitle>Informations du contrat</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Property Selection */}
-              <div>
-                <Label htmlFor="property">Propriété *</Label>
-                <Select value={contractData.propertyId} onValueChange={(value) => handleInputChange("propertyId", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionnez une propriété" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {properties.map((property: any) => (
-                      <SelectItem key={property.id} value={property.id.toString()}>
-                        {property.title} - {property.address}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                    <Separator />
 
-              {/* Tenant Information */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="tenantName">Nom du locataire *</Label>
-                  <Input
-                    id="tenantName"
-                    value={contractData.tenantName}
-                    onChange={(e) => handleInputChange("tenantName", e.target.value)}
-                    placeholder="Nom complet"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="tenantEmail">Email *</Label>
-                  <Input
-                    id="tenantEmail"
-                    type="email"
-                    value={contractData.tenantEmail}
-                    onChange={(e) => handleInputChange("tenantEmail", e.target.value)}
-                    placeholder="email@exemple.com"
-                  />
-                </div>
-              </div>
+                    {/* Tenant Information */}
+                    <div>
+                      <h3 className="text-lg font-semibold mb-4">Informations du Locataire</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="tenantName">Nom complet</Label>
+                          <Input
+                            id="tenantName"
+                            value={contractData.tenantName}
+                            onChange={(e) => setContractData({ ...contractData, tenantName: e.target.value })}
+                            placeholder="Nom et prénom du locataire"
+                            disabled
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="tenantCin">CIN *</Label>
+                          <Input
+                            id="tenantCin"
+                            value={contractData.tenantCin}
+                            onChange={(e) => setContractData({ ...contractData, tenantCin: e.target.value })}
+                            placeholder="Numéro de CIN du locataire"
+                            required
+                          />
+                        </div>
+                      </div>
+                    </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="tenantPhone">Téléphone</Label>
-                  <Input
-                    id="tenantPhone"
-                    value={contractData.tenantPhone}
-                    onChange={(e) => handleInputChange("tenantPhone", e.target.value)}
-                    placeholder="+216 XX XXX XXX"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="tenantCin">CIN Locataire *</Label>
-                  <Input
-                    id="tenantCin"
-                    value={contractData.tenantCin}
-                    onChange={(e) => handleInputChange("tenantCin", e.target.value)}
-                    placeholder="12345678"
-                  />
-                </div>
-              </div>
+                    <Separator />
 
-              <div>
-                <Label htmlFor="ownerCin">CIN Propriétaire *</Label>
-                <Input
-                  id="ownerCin"
-                  value={contractData.ownerCin}
-                  onChange={(e) => handleInputChange("ownerCin", e.target.value)}
-                  placeholder="87654321"
-                />
-              </div>
+                    {/* Property Information */}
+                    <div>
+                      <h3 className="text-lg font-semibold mb-4">Informations de la Propriété</h3>
+                      <div className="grid grid-cols-1 gap-4">
+                        <div>
+                          <Label htmlFor="propertyTitle">Titre de la propriété</Label>
+                          <Input
+                            id="propertyTitle"
+                            value={contractData.propertyTitle}
+                            disabled
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="propertyAddress">Adresse</Label>
+                          <Input
+                            id="propertyAddress"
+                            value={contractData.propertyAddress}
+                            disabled
+                          />
+                        </div>
+                      </div>
+                    </div>
 
-              {/* Contract Dates */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="startDate">Date de début *</Label>
-                  <Input
-                    id="startDate"
-                    type="date"
-                    value={contractData.startDate}
-                    onChange={(e) => handleInputChange("startDate", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="endDate">Date de fin *</Label>
-                  <Input
-                    id="endDate"
-                    type="date"
-                    value={contractData.endDate}
-                    onChange={(e) => handleInputChange("endDate", e.target.value)}
-                  />
-                </div>
-              </div>
+                    <Separator />
 
-              {/* Financial Information */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="monthlyRent">Loyer mensuel (TND) *</Label>
-                  <Input
-                    id="monthlyRent"
-                    type="number"
-                    value={contractData.monthlyRent}
-                    onChange={(e) => handleInputChange("monthlyRent", e.target.value)}
-                    placeholder="450"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="deposit">Caution (TND)</Label>
-                  <Input
-                    id="deposit"
-                    type="number"
-                    value={contractData.deposit}
-                    onChange={(e) => handleInputChange("deposit", e.target.value)}
-                    placeholder="450"
-                  />
-                </div>
-              </div>
+                    {/* Contract Terms */}
+                    <div>
+                      <h3 className="text-lg font-semibold mb-4">Conditions du Contrat</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="startDate">Date de début</Label>
+                          <Input
+                            id="startDate"
+                            type="date"
+                            value={contractData.startDate}
+                            onChange={(e) => setContractData({ ...contractData, startDate: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="endDate">Date de fin</Label>
+                          <Input
+                            id="endDate"
+                            type="date"
+                            value={contractData.endDate}
+                            onChange={(e) => setContractData({ ...contractData, endDate: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="monthlyRent">Loyer mensuel (TND)</Label>
+                          <Input
+                            id="monthlyRent"
+                            type="number"
+                            value={contractData.monthlyRent}
+                            onChange={(e) => setContractData({ ...contractData, monthlyRent: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="deposit">Caution (TND)</Label>
+                          <Input
+                            id="deposit"
+                            type="number"
+                            value={contractData.deposit}
+                            onChange={(e) => setContractData({ ...contractData, deposit: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="paymentDueDate">Date d'échéance mensuelle</Label>
+                          <Select value={contractData.paymentDueDate} onValueChange={(value) => setContractData({ ...contractData, paymentDueDate: value })}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Array.from({ length: 28 }, (_, i) => i + 1).map((day) => (
+                                <SelectItem key={day} value={day.toString()}>
+                                  Le {day} de chaque mois
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
 
-              {/* Special Terms */}
-              <div>
-                <Label htmlFor="conditions">Conditions particulières</Label>
-                <Textarea
-                  id="conditions"
-                  value={contractData.conditions}
-                  onChange={(e) => handleInputChange("conditions", e.target.value)}
-                  placeholder="Ajoutez des conditions spéciales si nécessaire..."
-                  rows={4}
-                />
-              </div>
-            </CardContent>
-          </Card>
+                    {/* Special Conditions */}
+                    <div>
+                      <Label htmlFor="specialConditions">Conditions spéciales (optionnel)</Label>
+                      <Textarea
+                        id="specialConditions"
+                        value={contractData.specialConditions}
+                        onChange={(e) => setContractData({ ...contractData, specialConditions: e.target.value })}
+                        placeholder="Conditions spéciales, règles ou notes particulières..."
+                        rows={4}
+                      />
+                    </div>
 
-          {/* Contract Preview */}
-          <Card className="glass-card">
-            <CardHeader>
-              <CardTitle>Aperçu du contrat</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4 text-sm">
-                <div className="text-center font-bold text-lg mb-6">
-                  CONTRAT DE LOCATION
-                </div>
-                
-                <div>
-                  <strong>Propriété:</strong> {contractRequests.find((offer: any) => offer.id.toString() === contractData.offerId)?.property?.title || "Non sélectionnée"}
-                </div>
-                
-                <div>
-                  <strong>Locataire:</strong> {contractData.tenantName || "Non renseigné"}
-                </div>
-                
-                <div>
-                  <strong>Email:</strong> {contractData.tenantEmail || "Non renseigné"}
-                </div>
-                
-                <div>
-                  <strong>CIN Locataire:</strong> {contractData.tenantCin || "Non renseigné"}
-                </div>
-                
-                <div>
-                  <strong>CIN Propriétaire:</strong> {contractData.ownerCin || "Non renseigné"}
-                </div>
-                
-                <div>
-                  <strong>Période:</strong> {contractData.startDate ? new Date(contractData.startDate).toLocaleDateString('fr-FR') : "Non renseignée"} 
-                  {contractData.endDate ? ` au ${new Date(contractData.endDate).toLocaleDateString('fr-FR')}` : ""}
-                </div>
-                
-                <div>
-                  <strong>Loyer mensuel:</strong> {contractData.monthlyRent ? `${contractData.monthlyRent} TND` : "Non renseigné"}
-                </div>
-                
-                <div>
-                  <strong>Caution:</strong> {contractData.deposit || contractData.monthlyRent ? `${contractData.deposit || contractData.monthlyRent} TND` : "Non renseignée"}
-                </div>
-
-                {contractData.conditions && (
-                  <div>
-                    <strong>Conditions particulières:</strong>
-                    <p className="mt-1 text-muted-foreground">{contractData.conditions}</p>
-                  </div>
-                )}
-
-                <div className="mt-8 p-4 glass-card rounded-lg">
-                  <p className="text-xs text-muted-foreground">
-                    Ce contrat sera envoyé par email au locataire pour signature numérique sécurisée.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Actions */}
-        <div className="flex justify-end space-x-4 mt-8">
-          <Button variant="outline" onClick={() => navigate("/contracts")}>
-            Annuler
-          </Button>
-          <Button onClick={generateContract} className="flex items-center space-x-2">
-            <Send className="h-4 w-4" />
-            <span>Générer et envoyer le contrat</span>
-          </Button>
-        </div>
+                    {/* Submit Button */}
+                    <div className="flex justify-end space-x-4 pt-6">
+                      <Button type="button" variant="outline" onClick={() => navigate("/contracts")}>
+                        Annuler
+                      </Button>
+                      <Button 
+                        type="submit" 
+                        disabled={createContract.isPending}
+                        className="flex items-center space-x-2"
+                      >
+                        <Send className="h-4 w-4" />
+                        <span>
+                          {createContract.isPending ? "Création..." : "Créer le Contrat"}
+                        </span>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </form>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
-};
-
-export default CreateContract;
+}

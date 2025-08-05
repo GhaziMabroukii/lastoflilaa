@@ -66,11 +66,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = parseInt(req.query.userId as string);
       const userType = req.query.userType as string;
+      const statusFilter = req.query.status as string;
       
-      console.log(`Fetching offers for userId: ${userId}, userType: ${userType}`);
+      console.log(`Fetching offers for userId: ${userId}, userType: ${userType}, status: ${statusFilter}`);
       
+      let whereCondition;
       let offers;
+      
       if (userType === 'owner') {
+        // Base condition for owner
+        whereCondition = eq(offersTable.ownerId, userId);
+        
+        // Add status filter if provided
+        if (statusFilter) {
+          whereCondition = and(whereCondition, eq(offersTable.status, statusFilter));
+        }
+
         // Owners see offers received for their properties
         offers = await db.select({
           id: offersTable.id,
@@ -98,9 +109,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(offersTable)
         .leftJoin(properties, eq(offersTable.propertyId, properties.id))
         .leftJoin(users, eq(offersTable.tenantId, users.id))
-        .where(eq(offersTable.ownerId, userId))
+        .where(whereCondition)
         .orderBy(desc(offersTable.createdAt));
       } else {
+        // Base condition for tenant
+        whereCondition = eq(offersTable.tenantId, userId);
+        
+        // Add status filter if provided
+        if (statusFilter) {
+          whereCondition = and(whereCondition, eq(offersTable.status, statusFilter));
+        }
+
         // Tenants see offers they sent
         offers = await db.select({
           id: offersTable.id,
@@ -128,11 +147,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(offersTable)
         .leftJoin(properties, eq(offersTable.propertyId, properties.id))
         .leftJoin(users, eq(offersTable.ownerId, users.id))
-        .where(eq(offersTable.tenantId, userId))
+        .where(whereCondition)
         .orderBy(desc(offersTable.createdAt));
       }
       
-      console.log(`Found ${offers.length} offers for user ${userId} (${userType})`);
+      console.log(`Found ${offers.length} offers for user ${userId} (${userType}) with status: ${statusFilter || 'all'}`);
       res.json(offers);
     } catch (error) {
       console.error("Failed to fetch offers:", error);
