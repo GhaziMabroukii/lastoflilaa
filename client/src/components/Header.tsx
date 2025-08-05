@@ -66,27 +66,7 @@ const Header = () => {
     navigate("/");
   };
 
-  const loginAsStudent = () => {
-    const studentUser = {
-      id: 4,
-      userType: "tenant",
-      username: "student1",
-      firstName: "Marie",
-      lastName: "Martin",
-      email: "marie.student@univ-tunis.tn"
-    };
-    
-    localStorage.setItem("user", JSON.stringify(studentUser));
-    localStorage.setItem("isAuthenticated", "true");
-    localStorage.setItem("userEmail", "marie.student@univ-tunis.tn");
-    localStorage.setItem("userType", "tenant");
-    
-    setIsAuthenticated(true);
-    setUserEmail("marie.student@univ-tunis.tn");
-    setUserType("tenant");
-    
-    navigate("/dashboard");
-  };
+
 
 
 
@@ -238,10 +218,6 @@ const Header = () => {
                    </DropdownMenuItem>
 
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={loginAsStudent} className="text-blue-600">
-                    <User className="mr-2 h-4 w-4" />
-                    Test: Connexion étudiant
-                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleLogout}>
                     <LogOut className="mr-2 h-4 w-4" />
                     Déconnexion
