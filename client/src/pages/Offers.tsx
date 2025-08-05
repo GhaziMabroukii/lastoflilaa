@@ -20,7 +20,19 @@ export default function Offers() {
   // Get current user from localStorage
   const getCurrentUser = () => {
     const user = localStorage.getItem("user");
-    const userType = localStorage.getItem("userType");
+    let userType = localStorage.getItem("userType");
+    const userEmail = localStorage.getItem("userEmail");
+    
+    // Auto-detect user type based on email if not set
+    if (!userType && userEmail) {
+      if (userEmail === "tenant@test.com" || userEmail.includes("student") || userEmail.includes("etudiant")) {
+        userType = "tenant";
+        localStorage.setItem("userType", "tenant");
+      } else {
+        userType = "owner"; 
+        localStorage.setItem("userType", "owner");
+      }
+    }
     
     if (user) {
       const parsedUser = JSON.parse(user);
@@ -39,7 +51,12 @@ export default function Offers() {
       };
     }
     
-    // Fallback to default owner if no user is set
+    // Fallback: determine based on email
+    if (userEmail === "tenant@test.com" || userEmail?.includes("student") || userEmail?.includes("etudiant")) {
+      return {"id": 4, "userType": "tenant"};
+    }
+    
+    // Default to owner
     return {"id": 1, "userType": "owner"};
   };
   
@@ -70,10 +87,7 @@ export default function Offers() {
     };
   }, []);
   
-  console.log("DEBUG - Current user in Offers page:", currentUser);
-  console.log("DEBUG - LocalStorage user:", localStorage.getItem("user"));
-  console.log("DEBUG - LocalStorage userType:", localStorage.getItem("userType"));
-  console.log("DEBUG - LocalStorage userEmail:", localStorage.getItem("userEmail"));
+  console.log("Current user in Offers page:", currentUser);
 
   const { data: offers = [], isLoading } = useQuery({
     queryKey: ["/api/offers", currentUser.id, currentUser.userType],

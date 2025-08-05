@@ -21,7 +21,19 @@ const Header = () => {
     const updateUserState = () => {
       const authStatus = localStorage.getItem("isAuthenticated");
       const email = localStorage.getItem("userEmail");
-      const type = localStorage.getItem("userType");
+      let type = localStorage.getItem("userType");
+      
+      // Auto-detect user type based on email if not set
+      if (!type && email) {
+        if (email === "tenant@test.com" || email.includes("student") || email.includes("etudiant")) {
+          type = "tenant";
+          localStorage.setItem("userType", "tenant");
+        } else {
+          type = "owner";
+          localStorage.setItem("userType", "owner");
+        }
+      }
+      
       setIsAuthenticated(!!authStatus);
       setUserEmail(email || "");
       setUserType(type || "");
@@ -54,73 +66,29 @@ const Header = () => {
     navigate("/");
   };
 
-  const switchToTenant = () => {
-    console.log("SWITCHING TO TENANT - BEFORE:", { userType, userEmail });
-    const tenantUser = {
+  const loginAsStudent = () => {
+    const studentUser = {
       id: 4,
       userType: "tenant",
-      username: "tenant1",
+      username: "student1",
       firstName: "Marie",
       lastName: "Martin",
-      email: "tenant@test.com"
+      email: "marie.student@univ-tunis.tn"
     };
     
-    // Clear all existing user data first
-    localStorage.removeItem("user");
-    localStorage.removeItem("userType");
-    localStorage.removeItem("userEmail");
-    console.log("CLEARED localStorage");
-    
-    // Set new tenant data
-    localStorage.setItem("user", JSON.stringify(tenantUser));
+    localStorage.setItem("user", JSON.stringify(studentUser));
     localStorage.setItem("isAuthenticated", "true");
-    localStorage.setItem("userEmail", "tenant@test.com");
+    localStorage.setItem("userEmail", "marie.student@univ-tunis.tn");
     localStorage.setItem("userType", "tenant");
-    console.log("SET localStorage - user:", localStorage.getItem("user"));
-    console.log("SET localStorage - userType:", localStorage.getItem("userType"));
-    console.log("SWITCHING TO TENANT - AFTER LOCALSTORAGE:", tenantUser);
     
     setIsAuthenticated(true);
-    setUserEmail("tenant@test.com");
+    setUserEmail("marie.student@univ-tunis.tn");
     setUserType("tenant");
-    console.log("SWITCHING TO TENANT - AFTER STATE UPDATE:", { userType: "tenant", userEmail: "tenant@test.com" });
     
-    // Force immediate update without reload
-    window.dispatchEvent(new Event('storage'));
-    // Force page reload to ensure all components update
-    setTimeout(() => window.location.reload(), 100);
+    navigate("/dashboard");
   };
 
-  const switchToOwner = () => {
-    console.log("SWITCHING TO OWNER - BEFORE:", { userType, userEmail });
-    const ownerUser = {
-      id: 1,
-      userType: "owner",
-      username: "owner1",
-      firstName: "Pierre",
-      lastName: "Durand",
-      email: "owner@test.com"
-    };
-    // Clear all existing user data first
-    localStorage.removeItem("user");
-    localStorage.removeItem("userType");
-    localStorage.removeItem("userEmail");
-    
-    // Set new owner data
-    localStorage.setItem("user", JSON.stringify(ownerUser));
-    localStorage.setItem("isAuthenticated", "true");
-    localStorage.setItem("userEmail", "owner@test.com");
-    localStorage.setItem("userType", "owner");
-    console.log("SWITCHING TO OWNER - AFTER LOCALSTORAGE:", ownerUser);
-    setIsAuthenticated(true);
-    setUserEmail("owner@test.com");
-    setUserType("owner");
-    console.log("SWITCHING TO OWNER - AFTER STATE UPDATE:", { userType: "owner", userEmail: "owner@test.com" });
-    // Force immediate update without reload
-    window.dispatchEvent(new Event('storage'));
-    // Force page reload to ensure all components update
-    setTimeout(() => window.location.reload(), 100);
-  };
+
 
   return (
     <header className="glass sticky top-0 z-50 border-b border-white/10">
@@ -270,31 +238,10 @@ const Header = () => {
                    </DropdownMenuItem>
 
                   <DropdownMenuSeparator />
-                  
-                  {/* User Switching (Development) */}
-                  <div className="px-2 py-1 bg-muted/20 rounded-md">
-                    <p className="text-xs text-muted-foreground mb-2">Mode de test: <span className="font-medium text-primary">{userType === "owner" ? "Propriétaire" : "Locataire"}</span></p>
-                    <div className="flex gap-1">
-                      <Button 
-                        size="sm" 
-                        variant={userType === "owner" ? "default" : "outline"}
-                        onClick={switchToOwner}
-                        className="text-xs h-7 px-3"
-                      >
-                        {userType === "owner" ? "✓ " : ""}Propriétaire
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        variant={userType === "tenant" ? "default" : "outline"}
-                        onClick={switchToTenant}
-                        className="text-xs h-7 px-3"
-                      >
-                        {userType === "tenant" ? "✓ " : ""}Locataire
-                      </Button>
-                    </div>
-                  </div>
-
-                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={loginAsStudent} className="text-blue-600">
+                    <User className="mr-2 h-4 w-4" />
+                    Test: Connexion étudiant
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleLogout}>
                     <LogOut className="mr-2 h-4 w-4" />
                     Déconnexion
