@@ -56,7 +56,7 @@ const Header = () => {
 
   const switchToTenant = () => {
     const tenantUser = {
-      id: 2,
+      id: 4,
       userType: "tenant",
       username: "tenant1",
       firstName: "Marie",
@@ -71,7 +71,8 @@ const Header = () => {
     setIsAuthenticated(true);
     setUserEmail("tenant@test.com");
     setUserType("tenant");
-    window.location.reload(); // Refresh to update all components
+    // Force immediate update without reload
+    window.dispatchEvent(new Event('storage'));
   };
 
   const switchToOwner = () => {
@@ -87,10 +88,12 @@ const Header = () => {
     localStorage.setItem("isAuthenticated", "true");
     localStorage.setItem("userEmail", "owner@test.com");
     localStorage.setItem("userType", "owner");
+    console.log("Switched to owner user:", ownerUser);
     setIsAuthenticated(true);
     setUserEmail("owner@test.com");
     setUserType("owner");
-    window.location.reload(); // Refresh to update all components
+    // Force immediate update without reload
+    window.dispatchEvent(new Event('storage'));
   };
 
   return (
@@ -239,6 +242,31 @@ const Header = () => {
                      <User className="mr-2 h-4 w-4" />
                      Mon profil
                    </DropdownMenuItem>
+
+                  <DropdownMenuSeparator />
+                  
+                  {/* User Switching (Development) */}
+                  <div className="px-2 py-1">
+                    <p className="text-xs text-muted-foreground mb-2">Mode de test:</p>
+                    <div className="flex gap-1">
+                      <Button 
+                        size="sm" 
+                        variant={userType === "owner" ? "default" : "outline"}
+                        onClick={switchToOwner}
+                        className="text-xs h-6 px-2"
+                      >
+                        Propriétaire
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant={userType === "tenant" ? "default" : "outline"}
+                        onClick={switchToTenant}
+                        className="text-xs h-6 px-2"
+                      >
+                        Locataire
+                      </Button>
+                    </div>
+                  </div>
 
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout}>
