@@ -55,6 +55,7 @@ const Header = () => {
   };
 
   const switchToTenant = () => {
+    console.log("SWITCHING TO TENANT - BEFORE:", { userType, userEmail });
     const tenantUser = {
       id: 4,
       userType: "tenant",
@@ -67,15 +68,19 @@ const Header = () => {
     localStorage.setItem("isAuthenticated", "true");
     localStorage.setItem("userEmail", "tenant@test.com");
     localStorage.setItem("userType", "tenant");
-    console.log("Switched to tenant user:", tenantUser);
+    console.log("SWITCHING TO TENANT - AFTER LOCALSTORAGE:", tenantUser);
     setIsAuthenticated(true);
     setUserEmail("tenant@test.com");
     setUserType("tenant");
+    console.log("SWITCHING TO TENANT - AFTER STATE UPDATE:", { userType: "tenant", userEmail: "tenant@test.com" });
     // Force immediate update without reload
     window.dispatchEvent(new Event('storage'));
+    // Force page reload to ensure all components update
+    setTimeout(() => window.location.reload(), 100);
   };
 
   const switchToOwner = () => {
+    console.log("SWITCHING TO OWNER - BEFORE:", { userType, userEmail });
     const ownerUser = {
       id: 1,
       userType: "owner",
@@ -88,12 +93,15 @@ const Header = () => {
     localStorage.setItem("isAuthenticated", "true");
     localStorage.setItem("userEmail", "owner@test.com");
     localStorage.setItem("userType", "owner");
-    console.log("Switched to owner user:", ownerUser);
+    console.log("SWITCHING TO OWNER - AFTER LOCALSTORAGE:", ownerUser);
     setIsAuthenticated(true);
     setUserEmail("owner@test.com");
     setUserType("owner");
+    console.log("SWITCHING TO OWNER - AFTER STATE UPDATE:", { userType: "owner", userEmail: "owner@test.com" });
     // Force immediate update without reload
     window.dispatchEvent(new Event('storage'));
+    // Force page reload to ensure all components update
+    setTimeout(() => window.location.reload(), 100);
   };
 
   return (
@@ -246,24 +254,24 @@ const Header = () => {
                   <DropdownMenuSeparator />
                   
                   {/* User Switching (Development) */}
-                  <div className="px-2 py-1">
-                    <p className="text-xs text-muted-foreground mb-2">Mode de test:</p>
+                  <div className="px-2 py-1 bg-muted/20 rounded-md">
+                    <p className="text-xs text-muted-foreground mb-2">Mode de test: <span className="font-medium text-primary">{userType === "owner" ? "Propriétaire" : "Locataire"}</span></p>
                     <div className="flex gap-1">
                       <Button 
                         size="sm" 
                         variant={userType === "owner" ? "default" : "outline"}
                         onClick={switchToOwner}
-                        className="text-xs h-6 px-2"
+                        className="text-xs h-7 px-3"
                       >
-                        Propriétaire
+                        {userType === "owner" ? "✓ " : ""}Propriétaire
                       </Button>
                       <Button 
                         size="sm" 
                         variant={userType === "tenant" ? "default" : "outline"}
                         onClick={switchToTenant}
-                        className="text-xs h-6 px-2"
+                        className="text-xs h-7 px-3"
                       >
-                        Locataire
+                        {userType === "tenant" ? "✓ " : ""}Locataire
                       </Button>
                     </div>
                   </div>
