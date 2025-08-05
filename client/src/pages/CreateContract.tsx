@@ -37,8 +37,33 @@ const CreateContract = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Get current user from localStorage
-  const currentUser = JSON.parse(localStorage.getItem("user") || '{"id": 1, "userType": "owner"}');
+  // Get current user from localStorage with reactive updates
+  const getCurrentUser = () => {
+    const user = localStorage.getItem("user");
+    if (user) {
+      return JSON.parse(user);
+    }
+    return {"id": 1, "userType": "owner"};
+  };
+  
+  const [currentUser, setCurrentUser] = useState(getCurrentUser());
+  
+  // Listen for storage changes to update user when switched
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setCurrentUser(getCurrentUser());
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('focus', handleStorageChange);
+    const interval = setInterval(handleStorageChange, 1000);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', handleStorageChange);
+      clearInterval(interval);
+    };
+  }, []);
 
   // Sign contract mutation for owner signature during creation
   const signContract = useMutation({
@@ -71,10 +96,16 @@ const CreateContract = () => {
   });
 
   // Fetch accepted offers requesting contracts for the current owner
-  const { data: contractRequests = [] } = useQuery({
+  const { data: contractRequests = [], isLoading: isLoadingRequests } = useQuery({
     queryKey: ["/api/offers", currentUser.id, "received"],
-    queryFn: () => apiRequest(`/api/offers?userId=${currentUser.id}&type=received`),
-    select: (data) => data.filter((offer: any) => offer.status === 'contract_requested')
+    queryFn: () => apiRequest(`/api/offers?userId=${currentUser.id}&userType=owner`),
+    select: (data) => {
+      console.log("All offers for owner:", data);
+      const filtered = data.filter((offer: any) => offer.status === 'contract_requested');
+      console.log("Contract requests:", filtered);
+      return filtered;
+    },
+    enabled: currentUser.userType === 'owner'
   });
 
   // Create contract mutation
@@ -171,7 +202,7 @@ const CreateContract = () => {
   }
 
   const generateContract = () => {
-    if (!contractData.propertyId || !contractData.tenantName || !contractData.tenantEmail ||
+    if (!contractData.offerId || !contractData.tenantName || !contractData.tenantEmail ||
         !contractData.tenantCin || !contractData.ownerCin ||
         !contractData.startDate || !contractData.endDate || !contractData.monthlyRent) {
       toast({
@@ -182,16 +213,25 @@ const CreateContract = () => {
       return;
     }
 
-    const selectedProperty = properties.find((p: any) => p.id.toString() === contractData.propertyId);
+    const selectedOffer = contractRequests.find((offer: any) => offer.id.toString() === contractData.offerId);
     
+    if (!selectedOffer) {
+      toast({
+        title: "Erreur",
+        description: "Offre sélectionnée non trouvée",
+        variant: "destructive"
+      });
+      return;
+    }
+
     const contractPayload = {
-      offerId: 1, // Mock offer ID - should be from an actual offer
-      propertyId: parseInt(contractData.propertyId),
-      tenantId: 2, // Mock tenant ID - should be created or found based on tenant details
-      ownerId: parseInt(contractData.ownerId),
+      offerId: parseInt(contractData.offerId),
+      propertyId: selectedOffer.propertyId,
+      tenantId: selectedOffer.tenantId,
+      ownerId: selectedOffer.ownerId,
       contractData: {
-        propertyTitle: selectedProperty?.title || "Propriété",
-        propertyAddress: selectedProperty?.address || "Adresse",
+        propertyTitle: selectedOffer.property?.title || "Propriété",
+        propertyAddress: selectedOffer.property?.address || "Adresse",
         landlordName: "Ahmed Ben Ali", // Should come from owner data
         landlordCin: contractData.ownerCin,
         tenantName: contractData.tenantName,
@@ -473,7 +513,7 @@ const CreateContract = () => {
                 </div>
                 
                 <div>
-                  <strong>Propriété:</strong> {properties.find((p: any) => p.id.toString() === contractData.propertyId)?.title || "Non sélectionnée"}
+                  <strong>Propriété:</strong> {contractRequests.find((offer: any) => offer.id.toString() === contractData.offerId)?.property?.title || "Non sélectionnée"}
                 </div>
                 
                 <div>
