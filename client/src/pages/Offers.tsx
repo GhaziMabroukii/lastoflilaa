@@ -230,7 +230,9 @@ export default function Offers() {
             Retour
           </Button>
           <div>
-            <h1 className="text-3xl font-bold gradient-text">Mes Offres</h1>
+            <h1 className="text-3xl font-bold gradient-text">
+              {currentUser.userType === 'owner' ? 'Mes offres reçues' : 'Mes offres envoyées'}
+            </h1>
             <p className="text-muted-foreground">
               {currentUser.userType === 'owner' 
                 ? 'Gérez vos offres reçues pour vos propriétés' 

@@ -221,19 +221,7 @@ const Header = () => {
                      <User className="mr-2 h-4 w-4" />
                      Mon profil
                    </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  {/* Development User Switcher */}
-                  <div className="p-2">
-                    <p className="text-xs text-muted-foreground mb-2">Test Users:</p>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={switchToTenant}>
-                        Tenant
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={switchToOwner}>
-                        Owner
-                      </Button>
-                    </div>
-                  </div>
+
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout}>
                     <LogOut className="mr-2 h-4 w-4" />
