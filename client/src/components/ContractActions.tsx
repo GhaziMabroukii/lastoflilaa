@@ -117,9 +117,10 @@ export function ContractActions({ contract, currentUserId, isOwner }: ContractAc
             <div className="mt-4">
               <ContractGenerator
                 initialData={contract.contractData}
-                onSave={(contractData) => modifyMutation.mutate(contractData)}
+                onSave={(contractData: any) => modifyMutation.mutate(contractData)}
                 isLoading={modifyMutation.isPending}
                 mode="modify"
+                currentUserId={currentUserId}
               />
             </div>
           </DialogContent>

@@ -8,19 +8,34 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
 interface ContractGeneratorProps {
-  contract: any;
-  onSign: (signatureData: any) => void;
+  contract?: any;
+  onSign?: (signatureData: any) => void;
   isLoading?: boolean;
   currentUserId?: number;
+  // For modification mode
+  initialData?: any;
+  onSave?: (contractData: any) => void;
+  mode?: 'view' | 'modify';
 }
 
-export default function ContractGenerator({ contract, onSign, isLoading = false, currentUserId = 1 }: ContractGeneratorProps) {
+export default function ContractGenerator({ 
+  contract, 
+  onSign, 
+  isLoading = false, 
+  currentUserId = 1,
+  initialData,
+  onSave,
+  mode = 'view'
+}: ContractGeneratorProps) {
   const [signatureCanvas, setSignatureCanvas] = useState<SignatureCanvas | null>(null);
   const [showSignatureCanvas, setShowSignatureCanvas] = useState(false);
   const { toast } = useToast();
 
-  // Early return if contract is not loaded
-  if (!contract) {
+  // Handle different modes
+  const contractData = contract || initialData;
+  
+  // Early return if no contract data is available
+  if (!contractData) {
     return (
       <Card>
         <CardContent className="py-8">
@@ -32,12 +47,36 @@ export default function ContractGenerator({ contract, onSign, isLoading = false,
     );
   }
 
+  // For modify mode, handle the contract data differently
+  if (mode === 'modify' && initialData) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Modification du contrat</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="text-sm text-muted-foreground mb-4">
+              La fonctionnalité de modification est en cours de développement.
+            </div>
+            <Button 
+              onClick={() => onSave && onSave(initialData)}
+              disabled={isLoading}
+            >
+              {isLoading ? "Enregistrement..." : "Enregistrer les modifications"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   // Determine user role based on contract data
-  const userRole: 'owner' | 'tenant' = currentUserId === contract.ownerId ? 'owner' : 'tenant';
+  const userRole: 'owner' | 'tenant' = currentUserId === contractData.ownerId ? 'owner' : 'tenant';
   
   const canSign = () => {
-    if (userRole === 'owner' && !contract.ownerSignature) return true;
-    if (userRole === 'tenant' && contract.ownerSignature && !contract.tenantSignature) return true;
+    if (userRole === 'owner' && !contractData.ownerSignature) return true;
+    if (userRole === 'tenant' && contractData.ownerSignature && !contractData.tenantSignature) return true;
     return false;
   };
 
@@ -52,7 +91,7 @@ export default function ContractGenerator({ contract, onSign, isLoading = false,
     }
 
     const signatureData = signatureCanvas.toDataURL();
-    onSign({
+    onSign && onSign({
       signatureType: userRole,
       signatureData: signatureData
     });
@@ -96,7 +135,7 @@ export default function ContractGenerator({ contract, onSign, isLoading = false,
         heightLeft -= pageHeight;
       }
       
-      pdf.save(`contrat-${contract.id}.pdf`);
+      pdf.save(`contrat-${contractData.id || 'draft'}.pdf`);
       
       toast({
         title: "PDF généré",
@@ -118,7 +157,7 @@ export default function ContractGenerator({ contract, onSign, isLoading = false,
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <FileText className="h-5 w-5" />
-            <span>Contrat de Location #{contract.id}</span>
+            <span>Contrat de Location #{contractData.id || 'draft'}</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -135,13 +174,13 @@ export default function ContractGenerator({ contract, onSign, isLoading = false,
             <div className="mb-6">
               <p className="font-semibold mb-2">ENTRE LES SOUSSIGNÉS :</p>
               <div className="ml-4 space-y-2">
-                <p><strong>Le BAILLEUR:</strong> M. {contract.contractData?.landlordName || "Propriétaire"}</p>
-                {contract.contractData?.landlordCin && (
-                  <p className="ml-4">CIN: {contract.contractData.landlordCin}</p>
+                <p><strong>Le BAILLEUR:</strong> M. {contractData.contractData?.landlordName || contractData.landlordName || "Propriétaire"}</p>
+                {(contractData.contractData?.landlordCin || contractData.landlordCin) && (
+                  <p className="ml-4">CIN: {contractData.contractData?.landlordCin || contractData.landlordCin}</p>
                 )}
-                <p><strong>Le PRENEUR:</strong> M. {contract.contractData?.tenantName || "Locataire"}</p>
-                {contract.contractData?.tenantCin && (
-                  <p className="ml-4">CIN: {contract.contractData.tenantCin}</p>
+                <p><strong>Le PRENEUR:</strong> M. {contractData.contractData?.tenantName || contractData.tenantName || "Locataire"}</p>
+                {(contractData.contractData?.tenantCin || contractData.tenantCin) && (
+                  <p className="ml-4">CIN: {contractData.contractData?.tenantCin || contractData.tenantCin}</p>
                 )}
               </div>
             </div>
@@ -149,9 +188,9 @@ export default function ContractGenerator({ contract, onSign, isLoading = false,
             <div className="mb-6">
               <p className="font-semibold mb-2">IL A ÉTÉ CONVENU CE QUI SUIT :</p>
               <div className="ml-4 space-y-2">
-                <p>Le bailleur loue à M. {contract.contractData?.tenantName || "Locataire"}</p>
-                <p><strong>Propriété:</strong> {contract.contractData?.propertyTitle || "Propriété"}</p>
-                <p><strong>Adresse:</strong> {contract.contractData?.propertyAddress || "Adresse non spécifiée"}</p>
+                <p>Le bailleur loue à M. {contractData.contractData?.tenantName || contractData.tenantName || "Locataire"}</p>
+                <p><strong>Propriété:</strong> {contractData.contractData?.propertyTitle || contractData.propertyTitle || "Propriété"}</p>
+                <p><strong>Adresse:</strong> {contractData.contractData?.propertyAddress || contractData.propertyAddress || "Adresse non spécifiée"}</p>
               </div>
             </div>
 
@@ -163,9 +202,9 @@ export default function ContractGenerator({ contract, onSign, isLoading = false,
               <p><strong>DURÉE DU BAIL:</strong></p>
               <p className="ml-4">
                 Le bail est fait pour une durée déterminée du{" "}
-                {contract.contractData?.startDate ? new Date(contract.contractData.startDate).toLocaleDateString('fr-FR') : "__/__/__"}{" "}
+                {(contractData.contractData?.startDate || contractData.startDate) ? new Date(contractData.contractData?.startDate || contractData.startDate).toLocaleDateString('fr-FR') : "__/__/__"}{" "}
                 au{" "}
-                {contract.contractData?.endDate ? new Date(contract.contractData.endDate).toLocaleDateString('fr-FR') : "__/__/__"}
+                {(contractData.contractData?.endDate || contractData.endDate) ? new Date(contractData.contractData?.endDate || contractData.endDate).toLocaleDateString('fr-FR') : "__/__/__"}
               </p>
             </div>
 
@@ -177,12 +216,12 @@ export default function ContractGenerator({ contract, onSign, isLoading = false,
             <div className="mb-6">
               <p className="font-semibold mb-2">OBLIGATIONS DU PRENEUR:</p>
               <p>Le présent contrat est fait aux conditions ordinaires et de droit en pareille matière à savoir la loi du 01/09/1948 ou les règles générales établies par le Code Civil. Le preneur et le bailleur s'engagent à respecter leurs obligations réciproques et notamment le preneur en vertu des obligations suivantes concernant le bon ordre et la tenue de l'immeuble et surtout l'entretien constant des locaux loués. Il devra payer le loyer au premier du mois.</p>
-              <p><strong>Ce loyer s'élève actuellement à {contract.contractData?.monthlyRent || "___"} TND</strong></p>
+              <p><strong>Ce loyer s'élève actuellement à {contractData.contractData?.monthlyRent || contractData.monthlyRent || "___"} TND</strong></p>
             </div>
 
             <div className="mb-6">
               <p className="font-semibold mb-2">CAUTION:</p>
-              <p>Le montant de la caution s'élève à {contract.contractData?.deposit || "___"} TND</p>
+              <p>Le montant de la caution s'élève à {contractData.contractData?.deposit || contractData.deposit || "___"} TND</p>
             </div>
 
             <div className="mb-6">
@@ -191,10 +230,10 @@ export default function ContractGenerator({ contract, onSign, isLoading = false,
               <p>Le preneur ne peut en aucun cas procéder à une sous-location ou échange de bail de son logement.</p>
             </div>
 
-            {contract.contractData?.conditions && (
+            {(contractData.contractData?.conditions || contractData.conditions || contractData.contractData?.specialConditions || contractData.specialConditions) && (
               <div className="mb-6">
                 <p className="font-semibold mb-2">CONDITIONS PARTICULIÈRES:</p>
-                <p className="ml-4">{contract.contractData.conditions}</p>
+                <p className="ml-4">{contractData.contractData?.conditions || contractData.conditions || contractData.contractData?.specialConditions || contractData.specialConditions}</p>
               </div>
             )}
 
@@ -217,11 +256,11 @@ export default function ContractGenerator({ contract, onSign, isLoading = false,
                 <div className="text-center">
                   <p className="font-semibold mb-4">LE BAILLEUR</p>
                   <p className="text-xs mb-2">(ajouter la mention lu et approuvé)</p>
-                  {contract.ownerSignature ? (
+                  {contractData.ownerSignature ? (
                     <div className="border rounded p-4 bg-white min-h-[100px] flex flex-col items-center justify-center">
-                      <img src={contract.ownerSignature} alt="Signature propriétaire" className="max-h-16 max-w-full" />
+                      <img src={contractData.ownerSignature} alt="Signature propriétaire" className="max-h-16 max-w-full" />
                       <p className="text-xs text-muted-foreground mt-2">
-                        Signé le {contract.ownerSignedAt ? new Date(contract.ownerSignedAt).toLocaleDateString('fr-FR') : ''}
+                        Signé le {contractData.ownerSignedAt ? new Date(contractData.ownerSignedAt).toLocaleDateString('fr-FR') : ''}
                       </p>
                     </div>
                   ) : (
@@ -234,11 +273,11 @@ export default function ContractGenerator({ contract, onSign, isLoading = false,
                 <div className="text-center">
                   <p className="font-semibold mb-4">LE PRENEUR</p>
                   <p className="text-xs mb-2">(ajouter la mention lu et approuvé)</p>
-                  {contract.tenantSignature ? (
+                  {contractData.tenantSignature ? (
                     <div className="border rounded p-4 bg-white min-h-[100px] flex flex-col items-center justify-center">
-                      <img src={contract.tenantSignature} alt="Signature locataire" className="max-h-16 max-w-full" />
+                      <img src={contractData.tenantSignature} alt="Signature locataire" className="max-h-16 max-w-full" />
                       <p className="text-xs text-muted-foreground mt-2">
-                        Signé le {contract.tenantSignedAt ? new Date(contract.tenantSignedAt).toLocaleDateString('fr-FR') : ''}
+                        Signé le {contractData.tenantSignedAt ? new Date(contractData.tenantSignedAt).toLocaleDateString('fr-FR') : ''}
                       </p>
                     </div>
                   ) : (
