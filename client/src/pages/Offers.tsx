@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,36 @@ export default function Offers() {
   const queryClient = useQueryClient();
 
   // Get current user from localStorage
-  const currentUser = JSON.parse(localStorage.getItem("user") || '{"id": 1, "userType": "owner"}');
+  const getCurrentUser = () => {
+    const user = localStorage.getItem("user");
+    if (user) {
+      return JSON.parse(user);
+    }
+    // Fallback to default owner if no user is set
+    return {"id": 1, "userType": "owner"};
+  };
+  
+  const [currentUser, setCurrentUser] = useState(getCurrentUser());
+  
+  // Listen for storage changes to update user when switched
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setCurrentUser(getCurrentUser());
+    };
+
+    // Listen for storage events and focus events (for same-tab changes)
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('focus', handleStorageChange);
+    
+    // Check for changes every second (since localStorage changes in same tab don't trigger storage event)
+    const interval = setInterval(handleStorageChange, 1000);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', handleStorageChange);
+      clearInterval(interval);
+    };
+  }, []);
   
   console.log("Current user in Offers page:", currentUser);
 
