@@ -64,15 +64,27 @@ const Header = () => {
       lastName: "Martin",
       email: "tenant@test.com"
     };
+    
+    // Clear all existing user data first
+    localStorage.removeItem("user");
+    localStorage.removeItem("userType");
+    localStorage.removeItem("userEmail");
+    console.log("CLEARED localStorage");
+    
+    // Set new tenant data
     localStorage.setItem("user", JSON.stringify(tenantUser));
     localStorage.setItem("isAuthenticated", "true");
     localStorage.setItem("userEmail", "tenant@test.com");
     localStorage.setItem("userType", "tenant");
+    console.log("SET localStorage - user:", localStorage.getItem("user"));
+    console.log("SET localStorage - userType:", localStorage.getItem("userType"));
     console.log("SWITCHING TO TENANT - AFTER LOCALSTORAGE:", tenantUser);
+    
     setIsAuthenticated(true);
     setUserEmail("tenant@test.com");
     setUserType("tenant");
     console.log("SWITCHING TO TENANT - AFTER STATE UPDATE:", { userType: "tenant", userEmail: "tenant@test.com" });
+    
     // Force immediate update without reload
     window.dispatchEvent(new Event('storage'));
     // Force page reload to ensure all components update
@@ -89,6 +101,12 @@ const Header = () => {
       lastName: "Durand",
       email: "owner@test.com"
     };
+    // Clear all existing user data first
+    localStorage.removeItem("user");
+    localStorage.removeItem("userType");
+    localStorage.removeItem("userEmail");
+    
+    // Set new owner data
     localStorage.setItem("user", JSON.stringify(ownerUser));
     localStorage.setItem("isAuthenticated", "true");
     localStorage.setItem("userEmail", "owner@test.com");

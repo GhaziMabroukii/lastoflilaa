@@ -20,9 +20,25 @@ export default function Offers() {
   // Get current user from localStorage
   const getCurrentUser = () => {
     const user = localStorage.getItem("user");
+    const userType = localStorage.getItem("userType");
+    
     if (user) {
-      return JSON.parse(user);
+      const parsedUser = JSON.parse(user);
+      // Ensure userType matches localStorage userType (in case of mismatch)
+      if (userType && parsedUser.userType !== userType) {
+        parsedUser.userType = userType;
+      }
+      return parsedUser;
     }
+    
+    // If no user but userType exists, create user object
+    if (userType) {
+      return {
+        "id": userType === "tenant" ? 4 : 1, 
+        "userType": userType
+      };
+    }
+    
     // Fallback to default owner if no user is set
     return {"id": 1, "userType": "owner"};
   };
@@ -32,15 +48,20 @@ export default function Offers() {
   // Listen for storage changes to update user when switched
   useEffect(() => {
     const handleStorageChange = () => {
-      setCurrentUser(getCurrentUser());
+      const newUser = getCurrentUser();
+      console.log("Storage changed, new user:", newUser);
+      setCurrentUser(newUser);
     };
+
+    // Initial check
+    handleStorageChange();
 
     // Listen for storage events and focus events (for same-tab changes)
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('focus', handleStorageChange);
     
-    // Check for changes every second (since localStorage changes in same tab don't trigger storage event)
-    const interval = setInterval(handleStorageChange, 1000);
+    // Check for changes every 500ms for faster updates
+    const interval = setInterval(handleStorageChange, 500);
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
@@ -49,7 +70,10 @@ export default function Offers() {
     };
   }, []);
   
-  console.log("Current user in Offers page:", currentUser);
+  console.log("DEBUG - Current user in Offers page:", currentUser);
+  console.log("DEBUG - LocalStorage user:", localStorage.getItem("user"));
+  console.log("DEBUG - LocalStorage userType:", localStorage.getItem("userType"));
+  console.log("DEBUG - LocalStorage userEmail:", localStorage.getItem("userEmail"));
 
   const { data: offers = [], isLoading } = useQuery({
     queryKey: ["/api/offers", currentUser.id, currentUser.userType],
