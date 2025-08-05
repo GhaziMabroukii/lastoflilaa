@@ -18,12 +18,30 @@ const Header = () => {
   const [, navigate] = useLocation();
 
   useEffect(() => {
-    const authStatus = localStorage.getItem("isAuthenticated");
-    const email = localStorage.getItem("userEmail");
-    const type = localStorage.getItem("userType");
-    setIsAuthenticated(!!authStatus);
-    setUserEmail(email || "");
-    setUserType(type || "");
+    const updateUserState = () => {
+      const authStatus = localStorage.getItem("isAuthenticated");
+      const email = localStorage.getItem("userEmail");
+      const type = localStorage.getItem("userType");
+      setIsAuthenticated(!!authStatus);
+      setUserEmail(email || "");
+      setUserType(type || "");
+    };
+
+    // Initial load
+    updateUserState();
+
+    // Listen for storage changes
+    window.addEventListener('storage', updateUserState);
+    window.addEventListener('focus', updateUserState);
+    
+    // Check for changes every second (since localStorage changes in same tab don't trigger storage event)
+    const interval = setInterval(updateUserState, 1000);
+
+    return () => {
+      window.removeEventListener('storage', updateUserState);
+      window.removeEventListener('focus', updateUserState);
+      clearInterval(interval);
+    };
   }, []);
 
   const handleLogout = () => {
