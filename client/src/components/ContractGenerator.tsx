@@ -19,6 +19,19 @@ export default function ContractGenerator({ contract, onSign, isLoading = false,
   const [showSignatureCanvas, setShowSignatureCanvas] = useState(false);
   const { toast } = useToast();
 
+  // Early return if contract is not loaded
+  if (!contract) {
+    return (
+      <Card>
+        <CardContent className="py-8">
+          <div className="text-center text-muted-foreground">
+            Chargement du contrat...
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   // Determine user role based on contract data
   const userRole: 'owner' | 'tenant' = currentUserId === contract.ownerId ? 'owner' : 'tenant';
   
