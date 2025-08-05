@@ -195,7 +195,7 @@ const Header = () => {
                    </DropdownMenuItem>
                    <DropdownMenuItem onClick={() => navigate("/offers")}>
                      <FileText className="mr-2 h-4 w-4" />
-                     {userType === "owner" ? "Offres reçues" : "Mes offres"}
+                     {userType === "owner" ? "Mes offres reçues" : "Mes offres envoyées"}
                    </DropdownMenuItem>
                    {userType === "owner" && (
                      <>
