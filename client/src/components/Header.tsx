@@ -49,6 +49,7 @@ const Header = () => {
     localStorage.setItem("isAuthenticated", "true");
     localStorage.setItem("userEmail", "tenant@test.com");
     localStorage.setItem("userType", "tenant");
+    console.log("Switched to tenant user:", tenantUser);
     setIsAuthenticated(true);
     setUserEmail("tenant@test.com");
     setUserType("tenant");

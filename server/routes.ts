@@ -142,7 +142,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/offers", async (req, res) => {
     try {
+      console.log("Received offer creation request:", req.body);
       const validatedData = insertOfferSchema.parse(req.body);
+      console.log("Validated offer data:", validatedData);
       
       // Check for existing pending offers for this property from this tenant
       const existingOffers = await storage.getOffersByTenantAndProperty(validatedData.tenantId, validatedData.propertyId);
@@ -154,6 +156,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      console.log("Creating offer with data:", validatedData);
       const offer = await storage.createOffer(validatedData);
       
       // Get property details for notifications
@@ -179,10 +182,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.status(201).json(offer);
     } catch (error) {
+      console.error("Error creating offer:", error);
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Invalid offer data", details: error.errors });
       }
-      res.status(500).json({ error: "Failed to create offer" });
+      res.status(500).json({ error: "Failed to create offer", details: error instanceof Error ? error.message : String(error) });
     }
   });
 
