@@ -70,30 +70,59 @@ export default function CreateContract() {
     paymentDueDate: "1", // Default to 1st of each month
   });
 
-  // Get current user
+  // Get current user from localStorage (consistent with ContractsDashboard)
   const getCurrentUser = () => {
-    const user = localStorage.getItem("user");
-    return user ? JSON.parse(user) : { id: 1, userType: "owner" };
+    const userData = localStorage.getItem("userData");
+    const userId = localStorage.getItem("userId");
+    const userType = localStorage.getItem("userType");
+    
+    if (userData && userId && userType) {
+      try {
+        const user = JSON.parse(userData);
+        const currentUser = {
+          id: parseInt(userId),
+          userType: userType,
+          ...user
+        };
+        console.log("Current user in CreateContract:", currentUser);
+        return currentUser;
+      } catch (error) {
+        console.error("Error parsing user data:", error);
+        return null;
+      }
+    }
+    console.log("No user found in localStorage");
+    return null;
   };
 
   const [currentUser] = useState(getCurrentUser());
 
   // Fetch contract requests (offers with status 'contract_requested')
   const { data: contractRequests = [], isLoading } = useQuery({
-    queryKey: ["/api/offers", "contract_requests", currentUser.id],
+    queryKey: ["/api/offers", "contract_requests", currentUser?.id],
     queryFn: async () => {
+      if (!currentUser) {
+        throw new Error('No user logged in');
+      }
+      
       const params = new URLSearchParams({
         userId: currentUser.id.toString(),
         userType: currentUser.userType,
         status: "contract_requested"
       });
+      
+      console.log("Fetching contract requests for user:", currentUser.id, "userType:", currentUser.userType);
+      
       const response = await fetch(`/api/offers?${params}`);
       if (!response.ok) throw new Error('Failed to fetch contract requests');
       const data = await response.json();
       
+      console.log("Contract requests received:", data);
+      
       // Filter for contract_requested status to be sure
       return Array.isArray(data) ? data.filter((offer: any) => offer.status === 'contract_requested') : [];
     },
+    enabled: !!currentUser,
   });
 
   // Create contract mutation
@@ -104,14 +133,15 @@ export default function CreateContract() {
         body: JSON.stringify(contractPayload),
       });
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/contracts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/offers"] });
       toast({
         title: "Contrat créé",
         description: "Le contrat a été créé avec succès. Vous pouvez maintenant le signer.",
       });
-      navigate("/contracts");
+      // Navigate to the specific contract to allow immediate signing
+      navigate(`/contract/${data.id}`);
     },
     onError: (error: any) => {
       toast({
@@ -169,12 +199,14 @@ export default function CreateContract() {
       offerId: selectedOfferId,
       propertyId: selectedOffer.propertyId,
       tenantId: selectedOffer.tenantId,
-      ownerId: selectedOffer.ownerId,
+      ownerId: currentUser.id, // Use the current logged-in user as owner
       contractData: {
         ...contractData,
         createdAt: new Date().toISOString(),
       },
     };
+    
+    console.log("Creating contract with payload:", contractPayload);
 
     createContract.mutate(contractPayload);
   };
