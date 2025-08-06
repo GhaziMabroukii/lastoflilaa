@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Download, Edit, Trash2 } from "lucide-react";
+import { Download, Edit, Trash2, Clock, AlertTriangle, FileX } from "lucide-react";
 import ContractGenerator from "./ContractGenerator";
 
 interface Contract {
@@ -82,9 +82,58 @@ export function ContractActions({ contract, currentUserId, isOwner }: ContractAc
     }
   });
 
+  // Early termination request mutation
+  const terminationRequestMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest(`/api/contracts/${contract.id}/request-termination`, {
+        method: 'POST'
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Demande envoyée",
+        description: "Demande d'arrêt anticipé envoyée au locataire.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/contracts', contract.id] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible d'envoyer la demande",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Modification request mutation
+  const modificationRequestMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest(`/api/contracts/${contract.id}/request-modification`, {
+        method: 'POST'
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Demande envoyée",
+        description: "Demande de modification envoyée au locataire.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/contracts', contract.id] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible d'envoyer la demande",
+        variant: "destructive",
+      });
+    }
+  });
+
   const canDownload = contract.status === 'active' || contract.status === 'fully_signed';
   const canModify = isOwner && (contract.status === 'draft' || contract.status === 'owner_signed');
   const isExpired = contract.tenantSignDeadline && new Date() > new Date(contract.tenantSignDeadline);
+  const isActive = contract.status === 'active' || contract.status === 'fully_signed';
+  const canRequestTermination = isOwner && isActive;
+  const canRequestModification = isOwner && isActive;
   
   // Tenants have very limited actions - only download when fully signed
   const isTenant = !isOwner;
@@ -128,6 +177,84 @@ export function ContractActions({ contract, currentUserId, isOwner }: ContractAc
             </div>
           </DialogContent>
         </Dialog>
+      )}
+
+      {/* Early Termination Request - Only for owners of active contracts */}
+      {canRequestTermination && !isTenant && (
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="outline" size="sm" className="border-orange-500 text-orange-600 hover:bg-orange-50">
+              <Clock className="h-4 w-4 mr-2" />
+              Arrêt anticipé
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-orange-500" />
+                Demander un arrêt anticipé
+              </AlertDialogTitle>
+              <AlertDialogDescription className="space-y-2">
+                <p>Vous êtes sur le point de demander un arrêt anticipé de ce contrat.</p>
+                <div className="bg-orange-50 p-3 rounded-lg border-l-4 border-orange-400">
+                  <p className="text-sm text-orange-700">
+                    <strong>Important :</strong> Le locataire doit accepter cette demande pour que l'arrêt soit effectif. 
+                    Si accepté, le contrat sera immédiatement terminé et le bien redeviendra disponible.
+                  </p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Annuler</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => terminationRequestMutation.mutate()}
+                disabled={terminationRequestMutation.isPending}
+                className="bg-orange-600 hover:bg-orange-700"
+              >
+                {terminationRequestMutation.isPending ? "Envoi..." : "Envoyer la demande"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* Modification Request - Only for owners of active contracts */}
+      {canRequestModification && !isTenant && (
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="outline" size="sm" className="border-blue-500 text-blue-600 hover:bg-blue-50">
+              <Edit className="h-4 w-4 mr-2" />
+              Demander modification
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <Edit className="h-5 w-5 text-blue-500" />
+                Demander une modification
+              </AlertDialogTitle>
+              <AlertDialogDescription className="space-y-2">
+                <p>Vous allez demander au locataire l'autorisation de modifier ce contrat.</p>
+                <div className="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-400">
+                  <p className="text-sm text-blue-700">
+                    <strong>Note :</strong> Le locataire doit approuver votre demande avant que vous puissiez 
+                    modifier le contrat. Les signatures seront supprimées après modification.
+                  </p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Annuler</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => modificationRequestMutation.mutate()}
+                disabled={modificationRequestMutation.isPending}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {modificationRequestMutation.isPending ? "Envoi..." : "Envoyer la demande"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
 
       {/* Cancel/Delete Contract - Only for owners */}

@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { ErrorAlert } from "@/components/ErrorAlert";
 import { 
   FileText, 
   ArrowLeft, 
@@ -55,6 +56,7 @@ export default function CreateContract() {
   const queryClient = useQueryClient();
 
   const [selectedOfferId, setSelectedOfferId] = useState<number | null>(null);
+  const [contractError, setContractError] = useState<{message: string, details?: string} | null>(null);
   const [contractData, setContractData] = useState({
     landlordName: "",
     landlordCin: "",
@@ -136,6 +138,7 @@ export default function CreateContract() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/contracts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/offers"] });
+      setContractError(null); // Clear any previous errors
       toast({
         title: "Contrat créé",
         description: "Le contrat a été créé avec succès. Vous pouvez maintenant le signer.",
@@ -144,11 +147,20 @@ export default function CreateContract() {
       navigate(`/contract/${data.id}`);
     },
     onError: (error: any) => {
-      toast({
-        title: "Erreur",
-        description: error.message || "Impossible de créer le contrat",
-        variant: "destructive",
-      });
+      console.error("Contract creation error:", error);
+      
+      // Handle contract creation restriction error specifically
+      if (error.message && error.message.includes("contrat actif")) {
+        setContractError({
+          message: "Impossible de créer un nouveau contrat pour cette propriété. Un contrat est déjà actif et doit être terminé ou expiré avant d'en créer un nouveau.",
+          details: "Vous pouvez utiliser les options 'Arrêt anticipé' ou 'Demander modification' pour gérer le contrat existant."
+        });
+      } else {
+        setContractError({
+          message: error.message || "Une erreur est survenue lors de la création du contrat",
+          details: "Veuillez vérifier vos informations et réessayer."
+        });
+      }
     }
   });
 
@@ -263,6 +275,19 @@ export default function CreateContract() {
             </p>
           </div>
         </div>
+
+        {/* Error Alert */}
+        {contractError && (
+          <div className="mb-6">
+            <ErrorAlert
+              type="warning"
+              title="Restriction de création de contrat"
+              message={contractError.message}
+              details={contractError.details}
+              onDismiss={() => setContractError(null)}
+            />
+          </div>
+        )}
 
         {/* Contract Requests Info */}
         {contractRequests.length === 0 ? (
