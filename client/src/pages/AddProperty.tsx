@@ -199,13 +199,13 @@ const AddProperty = () => {
       // Get current user data
       const currentUser = JSON.parse(localStorage.getItem("currentUser") || "{}");
       
-      // Prepare property data for API
+      // Prepare property data for API (ensuring correct types for Drizzle schema)
       const propertyData = {
         ownerId: currentUser.id,
         title: formData.title,
         description: formData.description,
         type: formData.type,
-        price: parseFloat(formData.price),
+        price: formData.price, // Keep as string for decimal type
         priceType: formData.priceType,
         surface: formData.surface ? parseInt(formData.surface) : null,
         rooms: formData.rooms ? parseInt(formData.rooms) : null,
@@ -213,8 +213,8 @@ const AddProperty = () => {
         address: formData.address,
         amenities: formData.amenities,
         rules: formData.rules.length > 0 ? formData.rules : null,
-        deposit: formData.pricing.deposit ? parseFloat(formData.pricing.deposit) : null,
-        fees: formData.pricing.fees ? parseFloat(formData.pricing.fees) : null,
+        deposit: formData.pricing.deposit || null, // Keep as string for decimal type
+        fees: formData.pricing.fees || null, // Keep as string for decimal type
         utilities: formData.pricing.utilities || null,
         utilitiesIncluded: formData.pricing.utilitiesIncluded,
         status: "Disponible"
