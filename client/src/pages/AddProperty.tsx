@@ -197,7 +197,7 @@ const AddProperty = () => {
 
     try {
       // Get current user data
-      const currentUser = JSON.parse(localStorage.getItem("currentUser") || "{}");
+      const currentUser = JSON.parse(localStorage.getItem("userData") || "{}");
       
       console.log("Current user:", currentUser);
       console.log("Form data before processing:", formData);
