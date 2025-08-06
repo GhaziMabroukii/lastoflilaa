@@ -75,8 +75,13 @@ export default function ContractGenerator({
   const userRole: 'owner' | 'tenant' = currentUserId === contractData.ownerId ? 'owner' : 'tenant';
   
   const canSign = () => {
-    if (userRole === 'owner' && !contractData.ownerSignature) return true;
-    if (userRole === 'tenant' && contractData.ownerSignature && !contractData.tenantSignature) return true;
+    if (userRole === 'owner') {
+      // Owner can sign if they haven't signed yet, regardless of contract status
+      return !contractData.ownerSignature;
+    } else if (userRole === 'tenant') {
+      // Tenant can sign if owner has signed but tenant hasn't
+      return contractData.ownerSignature && !contractData.tenantSignature;
+    }
     return false;
   };
 
@@ -310,10 +315,22 @@ export default function ContractGenerator({
           </Button>
         )}
 
-        {/* Info message for tenants when they can't sign yet */}
+        {/* Status messages */}
         {userRole === 'tenant' && !contractData.ownerSignature && (
           <div className="text-sm text-muted-foreground">
             En attente de la signature du propriétaire
+          </div>
+        )}
+        
+        {userRole === 'owner' && contractData.ownerSignature && !contractData.tenantSignature && (
+          <div className="text-sm text-muted-foreground">
+            Contrat signé. En attente de la signature du locataire.
+          </div>
+        )}
+
+        {contractData.ownerSignature && contractData.tenantSignature && (
+          <div className="text-sm text-green-600 font-medium">
+            Contrat entièrement signé et actif
           </div>
         )}
       </div>
