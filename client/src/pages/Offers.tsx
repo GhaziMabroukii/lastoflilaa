@@ -20,7 +20,6 @@ export default function Offers() {
   // Get current user from localStorage
   const getCurrentUser = () => {
     const userData = localStorage.getItem("userData");
-    const userType = localStorage.getItem("userType");
     
     if (userData) {
       try {
@@ -30,12 +29,8 @@ export default function Offers() {
       }
     }
     
-    // Fallback to valid user IDs that exist in database
-    if (userType === "tenant") {
-      return {"id": 7, "userType": "tenant"}; // sarah_tenant
-    } else {
-      return {"id": 6, "userType": "owner"}; // mohamed_owner
-    }
+    // If no user is logged in, return null to indicate no authentication
+    return null;
   };
   
   const [currentUser, setCurrentUser] = useState(getCurrentUser());
@@ -67,9 +62,18 @@ export default function Offers() {
   
   console.log("Current user in Offers page:", currentUser);
 
+  // Redirect to login if no user is authenticated
+  useEffect(() => {
+    if (!currentUser) {
+      navigate("/login");
+    }
+  }, [currentUser, navigate]);
+
   const { data: offers = [], isLoading } = useQuery({
-    queryKey: ["/api/offers", currentUser.id, currentUser.userType],
+    queryKey: ["/api/offers", currentUser?.id, currentUser?.userType],
     queryFn: async () => {
+      if (!currentUser) return [];
+      
       const params = new URLSearchParams({
         userId: currentUser.id.toString(),
         userType: currentUser.userType
@@ -80,6 +84,7 @@ export default function Offers() {
       // Ensure data is always an array
       return Array.isArray(data) ? data : [];
     },
+    enabled: !!currentUser, // Only run query if user is authenticated
   });
 
   const updateOfferStatus = useMutation({

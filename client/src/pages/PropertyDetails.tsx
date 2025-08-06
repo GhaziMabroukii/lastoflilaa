@@ -36,7 +36,20 @@ export default function PropertyDetails() {
   const propertyId = params?.id ? parseInt(params.id) : 0;
 
   // Get current user from localStorage
-  const currentUser = JSON.parse(localStorage.getItem("userData") || '{"id": 7, "userType": "tenant"}');
+  const getUserData = () => {
+    const userData = localStorage.getItem("userData");
+    if (userData) {
+      try {
+        return JSON.parse(userData);
+      } catch (e) {
+        console.error("Error parsing userData:", e);
+        return null;
+      }
+    }
+    return null;
+  };
+  
+  const currentUser = getUserData();
 
   const { data: property, isLoading, error } = useQuery({
     queryKey: ["/api/properties", propertyId],
@@ -65,13 +78,14 @@ export default function PropertyDetails() {
 
   // Fetch existing offers for this property and tenant
   const { data: existingOffers = [] } = useQuery({
-    queryKey: ["/api/offers", "tenant", propertyId, currentUser.id],
+    queryKey: ["/api/offers", "tenant", propertyId, currentUser?.id],
     queryFn: async () => {
+      if (!currentUser) return [];
       const response = await fetch(`/api/offers?userId=${currentUser.id}&userType=tenant`);
       const allOffers = await response.json();
       return allOffers.filter((offer: any) => offer.propertyId === propertyId);
     },
-    enabled: propertyId > 0 && currentUser.userType === "tenant",
+    enabled: propertyId > 0 && currentUser?.userType === "tenant",
   });
 
   const form = useForm({
