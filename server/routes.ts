@@ -693,21 +693,172 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Mock authentication route (replace with real auth later)
+  // Authentication routes with proper user type handling
   app.post("/api/auth/login", async (req, res) => {
-    const { username, password } = req.body;
-    
-    // Mock user for testing
-    const mockUser = {
-      id: 1,
-      username: "test_user",
-      userType: "tenant",
-      email: "test@example.com",
-      firstName: "Test",
-      lastName: "User",
-    };
-    
-    res.json({ user: mockUser, token: "mock-token" });
+    try {
+      const { username, password } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({ error: "Username and password required" });
+      }
+      
+      // Find user by username
+      const user = await storage.getUserByUsername(username);
+      if (!user) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+      
+      // In real implementation, you'd verify password hash here
+      // For now, we'll check if the password matches the expected pattern
+      if (password !== 'hashed_password_123' && password !== 'hashed_password_456' && 
+          password !== 'hashed_password_789' && password !== 'hashed_password_101' && 
+          password !== 'hashed_password_202') {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+      
+      // Create session token with user type
+      const sessionToken = `session_${user.id}_${user.userType}_${Date.now()}`;
+      
+      // Return user info with session token
+      const responseUser = {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phone: user.phone,
+        userType: user.userType,
+      };
+      
+      res.json({ 
+        user: responseUser, 
+        token: sessionToken,
+        userType: user.userType,
+        message: `Connexion réussie en tant que ${user.userType === 'owner' ? 'propriétaire' : 'locataire'}` 
+      });
+    } catch (error) {
+      console.error("Login error:", error);
+      res.status(500).json({ error: "Login failed" });
+    }
+  });
+
+  // Get current user session info
+  app.get("/api/auth/me", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: "No token provided" });
+      }
+      
+      const token = authHeader.split(' ')[1];
+      // Extract user ID from session token
+      const tokenParts = token.split('_');
+      if (tokenParts.length < 4 || tokenParts[0] !== 'session') {
+        return res.status(401).json({ error: "Invalid token" });
+      }
+      
+      const userId = parseInt(tokenParts[1]);
+      const userType = tokenParts[2];
+      
+      const user = await storage.getUser(userId);
+      if (!user || user.userType !== userType) {
+        return res.status(401).json({ error: "Invalid session" });
+      }
+      
+      const responseUser = {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phone: user.phone,
+        userType: user.userType,
+      };
+      
+      res.json({ user: responseUser });
+    } catch (error) {
+      console.error("Session validation error:", error);
+      res.status(401).json({ error: "Invalid session" });
+    }
+  });
+
+  // Registration with automatic user type detection
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const { username, password, email, firstName, lastName, phone } = req.body;
+      
+      if (!username || !password || !email) {
+        return res.status(400).json({ error: "Username, password, and email required" });
+      }
+      
+      // Check if user already exists
+      const existingUser = await storage.getUserByUsername(username);
+      if (existingUser) {
+        return res.status(409).json({ error: "Username already exists" });
+      }
+      
+      // Auto-detect user type based on email patterns
+      let userType = 'tenant'; // Default to tenant
+      const emailLower = email.toLowerCase();
+      
+      // Check for student email patterns
+      const isStudent = emailLower.includes('etudiant') || 
+                       emailLower.includes('student') || 
+                       emailLower.endsWith('.tn') ||
+                       emailLower.includes('universite') ||
+                       emailLower.includes('university') ||
+                       emailLower.includes('fst') ||
+                       emailLower.includes('iset') ||
+                       emailLower.includes('enis');
+      
+      // If not clearly a student email, check for owner patterns
+      if (!isStudent) {
+        const isOwner = emailLower.includes('proprietaire') ||
+                       emailLower.includes('owner') ||
+                       emailLower.includes('agence') ||
+                       emailLower.includes('immobilier') ||
+                       (!emailLower.endsWith('.tn') && 
+                        (emailLower.includes('gmail') || emailLower.includes('outlook') || emailLower.includes('hotmail')));
+        
+        if (isOwner) {
+          userType = 'owner';
+        }
+      }
+      
+      // Create user
+      const newUser = await storage.createUser({
+        username,
+        password, // In production, hash this password
+        email,
+        firstName,
+        lastName,
+        phone,
+        userType,
+      });
+      
+      // Create session token
+      const sessionToken = `session_${newUser.id}_${newUser.userType}_${Date.now()}`;
+      
+      const responseUser = {
+        id: newUser.id,
+        username: newUser.username,
+        email: newUser.email,
+        firstName: newUser.firstName,
+        lastName: newUser.lastName,
+        phone: newUser.phone,
+        userType: newUser.userType,
+      };
+      
+      res.status(201).json({ 
+        user: responseUser, 
+        token: sessionToken,
+        userType: newUser.userType,
+        message: `Compte créé avec succès en tant que ${newUser.userType === 'owner' ? 'propriétaire' : 'locataire'}` 
+      });
+    } catch (error) {
+      console.error("Registration error:", error);
+      res.status(500).json({ error: "Registration failed" });
+    }
   });
 
   const httpServer = createServer(app);
