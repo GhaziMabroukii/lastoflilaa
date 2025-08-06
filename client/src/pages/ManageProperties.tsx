@@ -103,15 +103,39 @@ const ManageProperties = () => {
       return;
     }
 
-    // Load properties from localStorage or use mock data
-    const savedProperties = localStorage.getItem("userProperties");
-    if (savedProperties) {
-      setProperties(JSON.parse(savedProperties));
-    } else {
-      setProperties(mockProperties);
-      localStorage.setItem("userProperties", JSON.stringify(mockProperties));
-    }
+    // Fetch properties from API
+    fetchOwnerProperties();
   }, [navigate, toast]);
+
+  const fetchOwnerProperties = async () => {
+    try {
+      const currentUser = JSON.parse(localStorage.getItem("currentUser") || "{}");
+      const response = await fetch(`/api/properties?ownerId=${currentUser.id}`);
+      
+      if (!response.ok) {
+        throw new Error("Failed to fetch properties");
+      }
+      
+      const fetchedProperties = await response.json();
+      setProperties(fetchedProperties.map((property: any) => ({
+        ...property,
+        revenue: 0, // Will be calculated from contracts later
+        views: Math.floor(Math.random() * 300), // Mock for now
+        messages: Math.floor(Math.random() * 20), // Mock for now
+        tenant: null, // Will be populated from active contracts
+        contractEnd: null
+      })));
+    } catch (error) {
+      console.error("Error fetching properties:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger vos biens",
+        variant: "destructive",
+      });
+      // Fallback to empty array instead of mock data
+      setProperties([]);
+    }
+  };
 
   const filteredProperties = properties.filter(property => {
     const matchesSearch = property.title.toLowerCase().includes(searchQuery.toLowerCase()) ||

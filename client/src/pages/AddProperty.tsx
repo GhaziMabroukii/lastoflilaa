@@ -182,7 +182,7 @@ const AddProperty = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validation
@@ -195,25 +195,60 @@ const AddProperty = () => {
       return;
     }
 
-    // Mock save - in real app would call API
-    const newProperty = {
-      ...formData,
-      id: Date.now(),
-      owner: JSON.parse(localStorage.getItem("userProfile") || "{}"),
-      createdAt: new Date().toISOString(),
-      status: "En attente de validation"
-    };
+    try {
+      // Get current user data
+      const currentUser = JSON.parse(localStorage.getItem("currentUser") || "{}");
+      
+      // Prepare property data for API
+      const propertyData = {
+        ownerId: currentUser.id,
+        title: formData.title,
+        description: formData.description,
+        type: formData.type,
+        price: parseFloat(formData.price),
+        priceType: formData.priceType,
+        surface: formData.surface ? parseInt(formData.surface) : null,
+        rooms: formData.rooms ? parseInt(formData.rooms) : null,
+        bathrooms: formData.bathrooms ? parseInt(formData.bathrooms) : null,
+        address: formData.address,
+        amenities: formData.amenities,
+        rules: formData.rules.length > 0 ? formData.rules : null,
+        deposit: formData.pricing.deposit ? parseFloat(formData.pricing.deposit) : null,
+        fees: formData.pricing.fees ? parseFloat(formData.pricing.fees) : null,
+        utilities: formData.pricing.utilities || null,
+        utilitiesIncluded: formData.pricing.utilitiesIncluded,
+        status: "Disponible"
+      };
 
-    // Save to mock storage
-    const existingProperties = JSON.parse(localStorage.getItem("userProperties") || "[]");
-    localStorage.setItem("userProperties", JSON.stringify([...existingProperties, newProperty]));
+      const response = await fetch("/api/properties", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(propertyData),
+      });
 
-    toast({
-      title: "Bien ajouté avec succès!",
-      description: "Votre bien est en cours de validation",
-    });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to create property");
+      }
 
-    navigate("/dashboard");
+      const createdProperty = await response.json();
+
+      toast({
+        title: "Bien ajouté avec succès!",
+        description: "Votre bien est maintenant disponible à la location",
+      });
+
+      navigate("/manage-properties");
+    } catch (error) {
+      console.error("Error creating property:", error);
+      toast({
+        title: "Erreur",
+        description: error instanceof Error ? error.message : "Impossible de créer le bien",
+        variant: "destructive",
+      });
+    }
   };
 
   return (

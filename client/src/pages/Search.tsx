@@ -32,75 +32,48 @@ const Search = () => {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [, navigate] = useLocation();
 
-  // Mock properties data
-  const mockProperties = [
-    {
-      id: 1,
-      title: "Studio moderne près INSAT",
-      price: 450,
-      priceType: "mois",
-      location: "Ariana, Raoued",
-      distance: "200m de l'INSAT",
-      rating: 4.8,
-      reviews: 24,
-      type: "studio",
-      amenities: ["wifi", "furnished", "parking"],
-      images: ["/placeholder.svg"],
-      isStudentFriendly: true,
-      owner: "Ahmed Karim",
-      available: true
-    },
-    {
-      id: 2,
-      title: "Appartement 2 pièces famille",
-      price: 680,
-      priceType: "mois",
-      location: "Tunis, Bardo",
-      distance: "5 min de l'école primaire",
-      rating: 4.6,
-      reviews: 18,
-      type: "apartment",
-      amenities: ["wifi", "garden", "security"],
-      images: ["/placeholder.svg"],
-      isFamilyFriendly: true,
-      owner: "Fatma Ben Ali",
-      available: true
-    },
-    {
-      id: 3,
-      title: "Villa avec jardin sécurisé",
-      price: 1200,
-      priceType: "mois",
-      location: "Sidi Bou Saïd",
-      distance: "10 min du centre",
-      rating: 4.9,
-      reviews: 32,
-      type: "villa",
-      amenities: ["wifi", "garden", "parking", "security"],
-      images: ["/placeholder.svg"],
-      isFamilyFriendly: true,
-      owner: "Mohamed Trabelsi",
-      available: true
-    },
-    {
-      id: 4,
-      title: "Studio étudiant meublé",
-      price: 380,
-      priceType: "mois",
-      location: "Tunis, Manouba",
-      distance: "300m de l'Université Manouba",
-      rating: 4.3,
-      reviews: 15,
-      type: "studio",
-      amenities: ["wifi", "furnished"],
-      images: ["/placeholder.svg"],
-      isStudentFriendly: true,
-      owner: "Leila Mansouri",
-      available: false
-    }
-  ];
+  const [properties, setProperties] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const [filteredProperties, setFilteredProperties] = useState(mockProperties);
+  useEffect(() => {
+    fetchProperties();
+  }, []);
+
+  const fetchProperties = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("/api/properties");
+      
+      if (!response.ok) {
+        throw new Error("Failed to fetch properties");
+      }
+      
+      const fetchedProperties = await response.json();
+      setProperties(fetchedProperties.map((property: any) => ({
+        ...property,
+        location: property.address,
+        rating: 4.5 + Math.random() * 0.5, // Mock rating for now
+        reviews: Math.floor(Math.random() * 50) + 5, // Mock reviews
+        owner: `Owner ${property.ownerId}`, // Will be populated with real owner data later
+        available: property.status === "Disponible",
+        isStudentFriendly: property.type === "studio" || property.amenities?.includes("étudiant"),
+        isFamilyFriendly: property.type === "villa" || property.rooms >= 2
+      })));
+    } catch (error) {
+      console.error("Error fetching properties:", error);
+      setProperties([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initialize filtered properties with fetched data
+  const [filteredProperties, setFilteredProperties] = useState<any[]>([]);
+
+  // Update filtered properties when properties change
+  useEffect(() => {
+    setFilteredProperties(properties);
+  }, [properties]);
 
   useEffect(() => {
     // Get user location
@@ -117,8 +90,8 @@ const Search = () => {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           setUserLocation(position);
-          // Filter properties within 5km radius (mock calculation)
-          const nearbyProperties = mockProperties.filter(p => 
+          // Filter properties within 5km radius
+          const nearbyProperties = properties.filter(p => 
             p.location.includes("Tunis") || p.location.includes("Ariana")
           );
           setFilteredProperties(nearbyProperties);
@@ -127,7 +100,7 @@ const Search = () => {
         (error) => {
           console.log("Erreur de géolocalisation:", error);
           // Fallback to nearby properties
-          const nearbyProperties = mockProperties.filter(p => 
+          const nearbyProperties = properties.filter(p => 
             p.location.includes("Tunis") || p.location.includes("Ariana")
           );
           setFilteredProperties(nearbyProperties);
@@ -137,7 +110,7 @@ const Search = () => {
   };
 
   const handleSearch = () => {
-    let filtered = mockProperties;
+    let filtered = properties;
 
     if (searchQuery) {
       filtered = filtered.filter(p => 
@@ -150,14 +123,14 @@ const Search = () => {
       filtered = filtered.filter(p => p.type === propertyType);
     }
 
-    filtered = filtered.filter(p => p.price >= priceRange[0] && p.price <= priceRange[1]);
+    filtered = filtered.filter(p => parseFloat(p.price) >= priceRange[0] && parseFloat(p.price) <= priceRange[1]);
 
     setFilteredProperties(filtered);
   };
 
   useEffect(() => {
     handleSearch();
-  }, [searchQuery, propertyType, priceRange]);
+  }, [searchQuery, propertyType, priceRange, properties]);
 
   const getAmenityIcon = (amenity: string) => {
     switch (amenity) {
