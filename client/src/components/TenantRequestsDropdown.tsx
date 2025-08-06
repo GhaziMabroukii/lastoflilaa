@@ -22,8 +22,13 @@ interface Request {
 export function TenantRequestsDropdown({ userId, userType }: TenantRequestsDropdownProps) {
   const [, navigate] = useLocation();
   
+  console.log("TenantRequestsDropdown: userType check:", userType, "userId:", userId);
+  
   // Only show for tenants
-  if (userType !== 'tenant') return null;
+  if (userType !== 'tenant') {
+    console.log("TenantRequestsDropdown: Not showing - userType is not tenant");
+    return null;
+  }
 
   // Fetch pending requests for this tenant
   const { data: allRequests = [] } = useQuery<Request[]>({
@@ -63,7 +68,9 @@ export function TenantRequestsDropdown({ userId, userType }: TenantRequestsDropd
     return type === 'modification' ? 'Modification' : 'Arrêt anticipé';
   };
 
-  if (allRequests.length === 0) return null;
+  console.log("TenantRequestsDropdown rendering for userId:", userId, "userType:", userType);
+  console.log("Requests data:", allRequests);
+  console.log("Pending count:", pendingCount);
 
   return (
     <DropdownMenu>

@@ -24,12 +24,15 @@ const Header = () => {
       const userData = localStorage.getItem("userData");
       const userType = localStorage.getItem("userType");
       
+      console.log("Header auth check:", { authStatus, userData: !!userData, userType });
+      
       if (authStatus && userData && userType) {
         try {
           const user = JSON.parse(userData);
           setIsAuthenticated(true);
           setUserEmail(user.email || user.username || "");
           setUserType(userType);
+          console.log("Header: Set user type to:", userType);
         } catch (error) {
           console.error("Error parsing user data:", error);
           setIsAuthenticated(false);
@@ -123,6 +126,7 @@ const Header = () => {
                 {userType === "tenant" && (() => {
                   const userData = localStorage.getItem("userData");
                   const userId = userData ? JSON.parse(userData).id : 7;
+                  console.log("Header: Rendering TenantRequestsDropdown for userId:", userId, "userType:", userType);
                   return (
                     <TenantRequestsDropdown 
                       userId={userId} 
