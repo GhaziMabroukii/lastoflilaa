@@ -53,21 +53,40 @@ export default function ContractsDashboard() {
   const userType = currentUser?.userType || 'tenant';
 
   // Fetch user's contracts based on their role
-  const { data: contracts = [], isLoading } = useQuery({
+  const { data: contracts = [], isLoading, error } = useQuery({
     queryKey: ['/api/contracts', currentUserId, userType],
     queryFn: async () => {
       // For owners: get contracts they created (ownerOnly=true)
       // For tenants: get contracts assigned to them (ownerOnly=false)
       const ownerOnly = userType === 'owner';
+      console.log(`Fetching contracts for user ${currentUserId}, userType: ${userType}, ownerOnly: ${ownerOnly}`);
+      
       const response = await fetch(`/api/contracts?userId=${currentUserId}&ownerOnly=${ownerOnly}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       });
-      if (!response.ok) throw new Error('Failed to fetch contracts');
-      return response.json();
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error(`Failed to fetch contracts: ${response.status} ${response.statusText}`, errorData);
+        throw new Error(`Failed to fetch contracts: ${response.status}`);
+      }
+      const data = await response.json();
+      console.log(`Received ${data.length} contracts:`, data);
+      return data;
     },
     refetchInterval: 10000, // Refetch every 10 seconds
-    enabled: !!currentUserId, // Only fetch if user is logged in
+    enabled: !!currentUserId && !!userType, // Only fetch if user is logged in and userType is set
+  });
+
+  // Debug logging
+  console.log('ContractsDashboard Debug:', {
+    currentUser,
+    currentUserId,
+    userType,
+    contractsCount: contracts.length,
+    contracts,
+    isLoading,
+    error
   });
 
   const getContractTitle = (contract: Contract) => {
@@ -109,6 +128,20 @@ export default function ContractsDashboard() {
               <div key={i} className="h-32 bg-muted rounded"></div>
             ))}
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-red-600 mb-4">Erreur de chargement</h1>
+          <p className="text-muted-foreground mb-4">
+            Impossible de charger les contrats. Veuillez vérifier votre connexion.
+          </p>
+          <p className="text-sm text-red-500">{error.message}</p>
         </div>
       </div>
     );

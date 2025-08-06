@@ -310,12 +310,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = parseInt(req.query.userId as string);
       const ownerOnly = req.query.ownerOnly === 'true';
       
+      console.log(`Fetching contracts for userId: ${userId}, ownerOnly: ${ownerOnly}`);
+      
+      if (isNaN(userId)) {
+        return res.status(400).json({ error: "Valid userId required" });
+      }
+      
       const contracts = ownerOnly ? 
         await storage.getOwnerContracts(userId) : 
         await storage.getContracts(userId);
+        
+      console.log(`Found ${contracts.length} contracts for user ${userId}`);
       res.json(contracts);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch contracts" });
+      console.error("Error fetching contracts:", error);
+      res.status(500).json({ error: "Failed to fetch contracts", details: error instanceof Error ? error.message : String(error) });
     }
   });
 
