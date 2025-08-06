@@ -982,10 +982,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // In real implementation, you'd verify password hash here
-      // For now, we'll check if the password matches the expected pattern
-      if (password !== 'hashed_password_123' && password !== 'hashed_password_456' && 
-          password !== 'hashed_password_789' && password !== 'hashed_password_101' && 
-          password !== 'hashed_password_202') {
+      // For testing, we'll check if the password matches what's stored in the database
+      if (password !== user.password) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
       
