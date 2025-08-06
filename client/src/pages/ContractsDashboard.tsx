@@ -25,13 +25,41 @@ interface Contract {
 
 export default function ContractsDashboard() {
   const [, navigate] = useLocation();
-  const currentUserId = 1; // Should come from auth context
+  
+  // Get current user from localStorage (real session management)
+  const getCurrentUser = () => {
+    const userData = localStorage.getItem("userData");
+    const userId = localStorage.getItem("userId");
+    const userType = localStorage.getItem("userType");
+    
+    if (userData && userId && userType) {
+      try {
+        const user = JSON.parse(userData);
+        return {
+          id: parseInt(userId),
+          userType: userType,
+          ...user
+        };
+      } catch (error) {
+        console.error("Error parsing user data:", error);
+        return null;
+      }
+    }
+    return null;
+  };
 
-  // Fetch user's contracts
+  const currentUser = getCurrentUser();
+  const currentUserId = currentUser?.id || 0;
+  const userType = currentUser?.userType || 'tenant';
+
+  // Fetch user's contracts based on their role
   const { data: contracts = [], isLoading } = useQuery({
-    queryKey: ['/api/contracts', currentUserId],
+    queryKey: ['/api/contracts', currentUserId, userType],
     queryFn: async () => {
-      const response = await fetch(`/api/contracts?userId=${currentUserId}&ownerOnly=true`, {
+      // For owners: get contracts they created (ownerOnly=true)
+      // For tenants: get contracts assigned to them (ownerOnly=false)
+      const ownerOnly = userType === 'owner';
+      const response = await fetch(`/api/contracts?userId=${currentUserId}&ownerOnly=${ownerOnly}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -39,6 +67,7 @@ export default function ContractsDashboard() {
       return response.json();
     },
     refetchInterval: 10000, // Refetch every 10 seconds
+    enabled: !!currentUserId, // Only fetch if user is logged in
   });
 
   const getContractTitle = (contract: Contract) => {
@@ -89,19 +118,25 @@ export default function ContractsDashboard() {
     <div className="container mx-auto px-4 py-8 max-w-6xl">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Mes Contrats</h1>
+          <h1 className="text-3xl font-bold mb-2">
+            {userType === 'owner' ? 'Mes Contrats' : 'Mes Contrats Reçus'}
+          </h1>
           <p className="text-muted-foreground">
-            Gérez vos contrats de location et suivez leur statut
+            {userType === 'owner' 
+              ? 'Gérez vos contrats de location et suivez leur statut'
+              : 'Consultez et signez vos contrats de location reçus'
+            }
           </p>
         </div>
         <div className="flex items-center gap-4">
-          <Button variant="outline" onClick={() => navigate("/notifications")}>
-            Notifications
-          </Button>
-          <Button onClick={() => navigate("/create-contract")}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nouveau Contrat
-          </Button>
+          <NotificationCenter userId={currentUserId} />
+          {/* Only owners can create new contracts */}
+          {userType === 'owner' && (
+            <Button onClick={() => navigate("/create-contract")}>
+              <Plus className="h-4 w-4 mr-2" />
+              Nouveau Contrat
+            </Button>
+          )}
         </div>
       </div>
 
@@ -111,12 +146,17 @@ export default function ContractsDashboard() {
             <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">Aucun contrat trouvé</h3>
             <p className="text-muted-foreground mb-6">
-              Vous n'avez pas encore de contrats. Créez votre premier contrat pour commencer.
+              {userType === 'owner' 
+                ? 'Vous n\'avez pas encore de contrats. Créez votre premier contrat pour commencer.'
+                : 'Vous n\'avez pas encore reçu de contrats. Les propriétaires vous enverront des contrats à signer.'
+              }
             </p>
-            <Button onClick={() => navigate("/create-contract")}>
-              <Plus className="h-4 w-4 mr-2" />
-              Créer un contrat
-            </Button>
+            {userType === 'owner' && (
+              <Button onClick={() => navigate("/create-contract")}>
+                <Plus className="h-4 w-4 mr-2" />
+                Créer un contrat
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -157,7 +197,7 @@ export default function ContractsDashboard() {
                       <Eye className="h-4 w-4 mr-2" />
                       Voir
                     </Button>
-                    {canModifyContract(contract) && (
+                    {canModifyContract(contract) && userType === 'owner' && (
                       <Button 
                         variant="outline" 
                         size="sm"

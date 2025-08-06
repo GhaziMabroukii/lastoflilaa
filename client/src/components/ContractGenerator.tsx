@@ -292,18 +292,29 @@ export default function ContractGenerator({
         </CardContent>
       </Card>
 
-      {/* Action Buttons */}
+      {/* Action Buttons - Role-based access */}
       <div className="flex justify-between items-center">
-        <Button variant="outline" onClick={generatePDF}>
-          <Download className="h-4 w-4 mr-2" />
-          Télécharger PDF
-        </Button>
+        {/* Download button for fully signed contracts */}
+        {(contractData.ownerSignature && contractData.tenantSignature) && (
+          <Button variant="outline" onClick={generatePDF}>
+            <Download className="h-4 w-4 mr-2" />
+            Télécharger PDF
+          </Button>
+        )}
         
+        {/* Signing button - only show when it's the user's turn to sign */}
         {canSign() && (
           <Button onClick={() => setShowSignatureCanvas(true)} disabled={isLoading}>
             <PenTool className="h-4 w-4 mr-2" />
-            Signer le contrat
+            {userRole === 'owner' ? 'Signer en tant que propriétaire' : 'Signer en tant que locataire'}
           </Button>
+        )}
+
+        {/* Info message for tenants when they can't sign yet */}
+        {userRole === 'tenant' && !contractData.ownerSignature && (
+          <div className="text-sm text-muted-foreground">
+            En attente de la signature du propriétaire
+          </div>
         )}
       </div>
 

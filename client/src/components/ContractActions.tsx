@@ -85,6 +85,9 @@ export function ContractActions({ contract, currentUserId, isOwner }: ContractAc
   const canDownload = contract.status === 'active' || contract.status === 'fully_signed';
   const canModify = isOwner && (contract.status === 'draft' || contract.status === 'owner_signed');
   const isExpired = contract.tenantSignDeadline && new Date() > new Date(contract.tenantSignDeadline);
+  
+  // Tenants have very limited actions - only download when fully signed
+  const isTenant = !isOwner;
 
   return (
     <div className="flex items-center gap-2">
@@ -101,8 +104,8 @@ export function ContractActions({ contract, currentUserId, isOwner }: ContractAc
         </Button>
       )}
 
-      {/* Modify Contract Button */}
-      {canModify && !isExpired && (
+      {/* Modify Contract Button - Only for owners */}
+      {canModify && !isExpired && !isTenant && (
         <Dialog open={isModifyDialogOpen} onOpenChange={setIsModifyDialogOpen}>
           <DialogTrigger asChild>
             <Button variant="outline" size="sm">
@@ -127,8 +130,8 @@ export function ContractActions({ contract, currentUserId, isOwner }: ContractAc
         </Dialog>
       )}
 
-      {/* Cancel/Delete Contract (for expired or draft) */}
-      {(isOwner && (contract.status === 'draft' || isExpired)) && (
+      {/* Cancel/Delete Contract - Only for owners */}
+      {(isOwner && !isTenant && (contract.status === 'draft' || isExpired)) && (
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="destructive" size="sm">
