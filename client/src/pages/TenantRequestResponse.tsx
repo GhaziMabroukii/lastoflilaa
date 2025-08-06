@@ -35,7 +35,20 @@ export default function TenantRequestResponse() {
   const requestId = parseInt(params.id || '0');
 
   // Get current user
-  const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+  const getUserData = () => {
+    const userData = localStorage.getItem("userData");
+    if (userData) {
+      try {
+        return JSON.parse(userData);
+      } catch (e) {
+        console.error("Error parsing userData:", e);
+        return null;
+      }
+    }
+    return null;
+  };
+  
+  const currentUser = getUserData();
   
   // Fetch request details
   const { data: request, isLoading } = useQuery<Request>({

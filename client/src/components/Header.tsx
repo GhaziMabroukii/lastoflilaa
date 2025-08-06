@@ -10,6 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { TenantRequestsDropdown } from "./TenantRequestsDropdown";
 
 const Header = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -118,6 +119,14 @@ const Header = () => {
           <div className="flex items-center space-x-3">
             {isAuthenticated && (
               <>
+                {/* Tenant Requests Dropdown for tenants only */}
+                {userType === "tenant" && (
+                  <TenantRequestsDropdown 
+                    userId={JSON.parse(localStorage.getItem("userData") || '{}').id || 7} 
+                    userType={userType} 
+                  />
+                )}
+                
                 {/* Notifications */}
                 <Button 
                   variant="ghost" 
