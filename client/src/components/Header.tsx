@@ -120,12 +120,16 @@ const Header = () => {
             {isAuthenticated && (
               <>
                 {/* Tenant Requests Dropdown for tenants only */}
-                {userType === "tenant" && (
-                  <TenantRequestsDropdown 
-                    userId={JSON.parse(localStorage.getItem("userData") || '{}').id || 7} 
-                    userType={userType} 
-                  />
-                )}
+                {userType === "tenant" && (() => {
+                  const userData = localStorage.getItem("userData");
+                  const userId = userData ? JSON.parse(userData).id : 7;
+                  return (
+                    <TenantRequestsDropdown 
+                      userId={userId} 
+                      userType={userType} 
+                    />
+                  );
+                })()}
                 
                 {/* Notifications */}
                 <Button 
@@ -223,6 +227,12 @@ const Header = () => {
                          Contrats
                        </DropdownMenuItem>
                      </>
+                   )}
+                   {userType === "tenant" && (
+                     <DropdownMenuItem onClick={() => navigate("/contracts")}>
+                       <FileText className="mr-2 h-4 w-4" />
+                       Mes contrats
+                     </DropdownMenuItem>
                    )}
                    <DropdownMenuItem onClick={() => navigate("/notifications")}>
                      <Bell className="mr-2 h-4 w-4" />

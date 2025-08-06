@@ -53,11 +53,11 @@ export default function TenantRequestResponse() {
   // Fetch request details
   const { data: request, isLoading } = useQuery<Request>({
     queryKey: [`/api/contract-${requestType}-requests/${requestId}`],
-    enabled: !!requestId
+    enabled: !!requestId && !!currentUser
   });
 
   // Fetch contract details
-  const { data: contract } = useQuery({
+  const { data: contract } = useQuery<any>({
     queryKey: [`/api/contracts/${request?.contractId}`],
     enabled: !!request?.contractId
   });
@@ -70,7 +70,7 @@ export default function TenantRequestResponse() {
         body: JSON.stringify({
           response: responseType,
           tenantResponse: response,
-          userId: currentUser.id
+          userId: currentUser?.id
         })
       });
     },
