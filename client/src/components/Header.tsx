@@ -32,7 +32,7 @@ const Header = () => {
           setIsAuthenticated(true);
           setUserEmail(user.email || user.username || "");
           setUserType(userType);
-          console.log("Header: Set user type to:", userType);
+          console.log("Header: Set user type to:", userType, "with user ID:", user.id);
         } catch (error) {
           console.error("Error parsing user data:", error);
           setIsAuthenticated(false);
@@ -73,8 +73,14 @@ const Header = () => {
     localStorage.removeItem("userEmail");
     localStorage.removeItem("userProfile");
     localStorage.removeItem("user");
+    localStorage.clear(); // Ensure everything is cleared
+    
     setIsAuthenticated(false);
-    navigate("/");
+    setUserEmail("");
+    setUserType("");
+    
+    console.log("Logout: Cleared all localStorage and state");
+    navigate("/login");
   };
 
 

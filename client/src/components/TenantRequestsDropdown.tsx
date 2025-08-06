@@ -36,10 +36,17 @@ export function TenantRequestsDropdown({ userId, userType }: TenantRequestsDropd
   }
 
   // Fetch pending requests for this tenant
-  const { data: allRequests = [], isLoading: requestsLoading } = useQuery<Request[]>({
+  const { data: allRequests = [], isLoading: requestsLoading, error } = useQuery<Request[]>({
     queryKey: [`/api/tenant-requests/${userId}`],
     enabled: userType === 'tenant' && !!userId,
     refetchInterval: 5000 // Refetch every 5 seconds for real-time updates
+  });
+  
+  console.log("TenantRequestsDropdown query result:", { 
+    allRequests, 
+    requestsLoading, 
+    error,
+    queryEnabled: userType === 'tenant' && !!userId 
   });
 
   const pendingCount = allRequests.filter(r => r.status === 'pending').length;
