@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertPropertySchema, insertOfferSchema, insertContractSchema, insertNotificationSchema, insertConversationSchema, insertMessageSchema, insertReviewSchema, contracts, users, conversations, messages, reviews, properties, offers } from "@shared/schema";
+import { insertPropertySchema, insertOfferSchema, insertContractSchema, insertNotificationSchema, insertConversationSchema, insertMessageSchema, insertReviewSchema, insertContractModificationRequestSchema, insertContractTerminationRequestSchema, contracts, users, conversations, messages, reviews, properties, offers, contractModificationRequests, contractTerminationRequests } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
@@ -354,6 +354,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (offer.status !== "contract_requested") {
         return res.status(400).json({ error: "Contract can only be created for requested offers" });
       }
+
+      // ENFORCEMENT: Check if there's already an active contract for this property
+      const existingActiveContract = await storage.getActiveContractForProperty(validatedData.propertyId);
+      if (existingActiveContract) {
+        return res.status(400).json({ 
+          error: "Cette propriété a déjà un contrat actif. Impossible de créer un nouveau contrat tant que l'actuel n'est pas terminé ou expiré.",
+          details: "Contract creation is restricted when an active contract exists"
+        });
+      }
+
+      // ENFORCEMENT: Additional check for contracts that might not be expired yet
+      const activeContracts = await db
+        .select()
+        .from(contracts)
+        .where(
+          and(
+            eq(contracts.propertyId, validatedData.propertyId),
+            eq(contracts.status, 'active')
+          )
+        );
+      
+      if (activeContracts.length > 0) {
+        return res.status(400).json({
+          error: "Un contrat actif existe déjà pour cette propriété. Vous devez attendre soit l'expiration naturelle du contrat, soit obtenir l'accord du locataire pour un arrêt anticipé.",
+          details: "Active contract prevents new contract creation"
+        });
+      }
       
       const contract = await storage.createContract(validatedData);
       
@@ -574,6 +601,243 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Contract modification error:", error);
       res.status(500).json({ error: "Failed to modify contract" });
+    }
+  });
+
+  // Contract modification request - Owner requests modification from tenant
+  app.post("/api/contracts/:id/request-modification", async (req, res) => {
+    try {
+      const contractId = parseInt(req.params.id);
+      const { requestedBy, requestedChanges } = req.body;
+      
+      const contract = await storage.getContract(contractId);
+      if (!contract) {
+        return res.status(404).json({ error: "Contract not found" });
+      }
+
+      // Only allow modification requests for active contracts
+      if (contract.status !== 'active') {
+        return res.status(400).json({ error: "Can only request modifications for active contracts" });
+      }
+
+      // Only owner can request modifications
+      if (contract.ownerId !== requestedBy) {
+        return res.status(403).json({ error: "Only the owner can request contract modifications" });
+      }
+
+      // Create modification request
+      const [modificationRequest] = await db
+        .insert(contractModificationRequests)
+        .values({
+          contractId,
+          requestedBy,
+          requestedChanges,
+          status: 'pending'
+        })
+        .returning();
+
+      // Notify tenant of modification request
+      await storage.createNotification({
+        userId: contract.tenantId,
+        title: "Demande de modification de contrat",
+        message: "Le propriétaire demande des modifications au contrat. Veuillez examiner la demande.",
+        type: "contract_modification_request",
+        relatedId: contractId,
+      });
+
+      res.status(201).json(modificationRequest);
+    } catch (error) {
+      console.error("Contract modification request error:", error);
+      res.status(500).json({ error: "Failed to create modification request" });
+    }
+  });
+
+  // Respond to contract modification request - Tenant responds
+  app.put("/api/contract-modification-requests/:id/respond", async (req, res) => {
+    try {
+      const requestId = parseInt(req.params.id);
+      const { response, tenantResponse, userId } = req.body; // response: 'accepted' | 'rejected'
+      
+      const [request] = await db
+        .select()
+        .from(contractModificationRequests)
+        .where(eq(contractModificationRequests.id, requestId));
+        
+      if (!request) {
+        return res.status(404).json({ error: "Modification request not found" });
+      }
+
+      const contract = await storage.getContract(request.contractId);
+      if (!contract || contract.tenantId !== userId) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      // Update request status
+      const [updatedRequest] = await db
+        .update(contractModificationRequests)
+        .set({
+          status: response,
+          tenantResponse,
+          respondedAt: new Date()
+        })
+        .where(eq(contractModificationRequests.id, requestId))
+        .returning();
+
+      if (response === 'accepted') {
+        // Update contract status to allow modifications
+        await db
+          .update(contracts)
+          .set({ 
+            status: 'modified',
+            modificationSummary: `Modifications acceptées: ${JSON.stringify(request.requestedChanges)}`,
+            updatedAt: new Date()
+          })
+          .where(eq(contracts.id, request.contractId));
+
+        // Notify owner that they can now modify the contract
+        await storage.createNotification({
+          userId: contract.ownerId,
+          title: "Modification acceptée",
+          message: "Le locataire a accepté votre demande de modification. Vous pouvez maintenant modifier le contrat.",
+          type: "contract_modification_accepted",
+          relatedId: request.contractId,
+        });
+      } else {
+        // Notify owner of rejection
+        await storage.createNotification({
+          userId: contract.ownerId,
+          title: "Modification refusée",
+          message: "Le locataire a refusé votre demande de modification. Le contrat reste inchangé.",
+          type: "contract_modification_rejected",
+          relatedId: request.contractId,
+        });
+      }
+
+      res.json(updatedRequest);
+    } catch (error) {
+      console.error("Contract modification response error:", error);
+      res.status(500).json({ error: "Failed to respond to modification request" });
+    }
+  });
+
+  // Contract early termination request - Owner requests early termination
+  app.post("/api/contracts/:id/request-termination", async (req, res) => {
+    try {
+      const contractId = parseInt(req.params.id);
+      const { requestedBy, reason } = req.body;
+      
+      const contract = await storage.getContract(contractId);
+      if (!contract) {
+        return res.status(404).json({ error: "Contract not found" });
+      }
+
+      // Only allow termination requests for active contracts
+      if (contract.status !== 'active') {
+        return res.status(400).json({ error: "Can only request termination for active contracts" });
+      }
+
+      // Only owner can request early termination
+      if (contract.ownerId !== requestedBy) {
+        return res.status(403).json({ error: "Only the owner can request early termination" });
+      }
+
+      // Create termination request
+      const [terminationRequest] = await db
+        .insert(contractTerminationRequests)
+        .values({
+          contractId,
+          requestedBy,
+          reason,
+          status: 'pending'
+        })
+        .returning();
+
+      // Notify tenant of termination request
+      await storage.createNotification({
+        userId: contract.tenantId,
+        title: "Demande d'arrêt anticipé du contrat",
+        message: `Le propriétaire demande l'arrêt anticipé du contrat. Raison: ${reason || 'Non spécifiée'}`,
+        type: "contract_termination_request",
+        relatedId: contractId,
+      });
+
+      res.status(201).json(terminationRequest);
+    } catch (error) {
+      console.error("Contract termination request error:", error);
+      res.status(500).json({ error: "Failed to create termination request" });
+    }
+  });
+
+  // Respond to contract termination request - Tenant responds
+  app.put("/api/contract-termination-requests/:id/respond", async (req, res) => {
+    try {
+      const requestId = parseInt(req.params.id);
+      const { response, tenantResponse, userId } = req.body; // response: 'accepted' | 'rejected'
+      
+      const [request] = await db
+        .select()
+        .from(contractTerminationRequests)
+        .where(eq(contractTerminationRequests.id, requestId));
+        
+      if (!request) {
+        return res.status(404).json({ error: "Termination request not found" });
+      }
+
+      const contract = await storage.getContract(request.contractId);
+      if (!contract || contract.tenantId !== userId) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      // Update request status
+      const [updatedRequest] = await db
+        .update(contractTerminationRequests)
+        .set({
+          status: response,
+          tenantResponse,
+          respondedAt: new Date()
+        })
+        .where(eq(contractTerminationRequests.id, requestId))
+        .returning();
+
+      if (response === 'accepted') {
+        // Terminate contract immediately and make property available
+        await db
+          .update(contracts)
+          .set({ 
+            status: 'terminated',
+            terminationReason: request.reason || 'Early termination accepted by tenant',
+            terminatedBy: contract.ownerId,
+            terminatedAt: new Date(),
+            updatedAt: new Date()
+          })
+          .where(eq(contracts.id, request.contractId));
+
+        // Update property status to available
+        await storage.updatePropertyStatus(contract.propertyId, 'Disponible');
+
+        // Notify owner that termination was accepted
+        await storage.createNotification({
+          userId: contract.ownerId,
+          title: "Arrêt anticipé accepté",
+          message: "Le locataire a accepté l'arrêt anticipé du contrat. La propriété est maintenant disponible.",
+          type: "contract_termination_accepted",
+          relatedId: request.contractId,
+        });
+      } else {
+        // Notify owner of rejection
+        await storage.createNotification({
+          userId: contract.ownerId,
+          title: "Arrêt anticipé refusé",
+          message: "Le locataire a refusé l'arrêt anticipé. Le contrat reste actif jusqu'à son expiration naturelle.",
+          type: "contract_termination_rejected",
+          relatedId: request.contractId,
+        });
+      }
+
+      res.json(updatedRequest);
+    } catch (error) {
+      console.error("Contract termination response error:", error);
+      res.status(500).json({ error: "Failed to respond to termination request" });
     }
   });
 

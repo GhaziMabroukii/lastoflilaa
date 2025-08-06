@@ -1,0 +1,58 @@
+ Gestion des contrats de location – Logique fonctionnelle
+1. Restriction de création d’un nouveau contrat
+Lorsqu’un contrat est actif (c’est-à-dire signé par le propriétaire et le locataire), il est interdit de créer un autre contrat pour le même bien tant que l’un des deux cas suivants ne se produit :
+
+Le délai du contrat est écoulé (fin de la durée définie, contrôlée par un compteur ou un timer).
+
+Le locataire met fin au contrat de manière anticipée.
+
+2. Demande d’arrêt anticipé du contrat
+Le propriétaire peut envoyer une demande d’arrêt anticipé au locataire :
+
+En cliquant sur un bouton dédié, une notification d’alerte est envoyée au locataire.
+
+Si le locataire accepte :
+
+Le contrat est immédiatement arrêté.
+
+Le bien est automatiquement marqué comme "disponible".
+
+Le propriétaire peut alors créer un nouveau contrat pour ce bien.
+
+Si le locataire refuse :
+
+Le contrat reste actif jusqu’à son expiration naturelle (fin du timer).
+
+Le propriétaire est notifié du refus, et aucune action supplémentaire n’est possible côté propriétaire.
+
+3. Modification du contrat
+Une fois le contrat signé par les deux parties, aucune modification directe n’est autorisée.
+
+La seule possibilité de modification après signature est via une demande de modification émise par le propriétaire :
+
+Un bouton "Demander une modification" permet d’envoyer une notification au locataire.
+
+Si le locataire accepte :
+
+Le propriétaire peut modifier le contrat.
+
+Le contrat passe en statut "modifié".
+
+Un résumé des modifications effectuées est affiché au locataire.
+
+Si le locataire refuse :
+
+Le propriétaire reçoit une alerte indiquant qu’il ne peut pas modifier le contrat.
+
+🏡 Création d’un bien à louer – Catégorisation et points forts
+Lors de la création d’une annonce de location, le propriétaire peut :
+
+Choisir une ou plusieurs catégories pour son bien, telles que :
+
+Famille, Étudiant, Maison d’été, Vue sur mer, Proche de la plage, etc.
+
+Ajouter un champ facultatif mettant en avant un point fort géographique ou stratégique du bien.
+
+Exemple : "À 200m de l’INSAT"
+
+Ce point fort peut être affiché publiquement sur la fiche du bien après sa création, pour attirer davantage de locataires.

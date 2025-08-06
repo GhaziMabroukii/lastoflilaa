@@ -39,6 +39,9 @@ export const properties = pgTable("properties", {
   fees: decimal("fees", { precision: 10, scale: 2 }),
   utilities: text("utilities"),
   utilitiesIncluded: boolean("utilities_included").default(false),
+  // New property categorization fields
+  categories: text("categories").array(), // Famille, Étudiant, Maison d'été, Vue sur mer, Proche de la plage
+  geographicHighlight: text("geographic_highlight"), // e.g., "À 200m de l'INSAT"
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -71,9 +74,16 @@ export const contracts = pgTable("contracts", {
   tenantSignature: text("tenant_signature"), // Base64 signature data
   ownerSignedAt: timestamp("owner_signed_at"),
   tenantSignedAt: timestamp("tenant_signed_at"),
-  status: text("status").notNull().default("draft"), // draft, owner_signed, fully_signed, active, expired, cancelled
+  status: text("status").notNull().default("draft"), // draft, owner_signed, fully_signed, active, expired, cancelled, terminated, modified
   tenantSignDeadline: timestamp("tenant_sign_deadline"), // 3 days from owner signature
   pdfUrl: text("pdf_url"),
+  // Enhanced contract management fields
+  contractStartDate: timestamp("contract_start_date"),
+  contractEndDate: timestamp("contract_end_date"),
+  modificationSummary: text("modification_summary"), // Summary of modifications made
+  terminationReason: text("termination_reason"), // Reason for early termination
+  terminatedBy: integer("terminated_by").references(() => users.id), // User who initiated termination
+  terminatedAt: timestamp("terminated_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -121,6 +131,30 @@ export const reviews = pgTable("reviews", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Contract modification requests table
+export const contractModificationRequests = pgTable("contract_modification_requests", {
+  id: serial("id").primaryKey(),
+  contractId: integer("contract_id").notNull().references(() => contracts.id),
+  requestedBy: integer("requested_by").notNull().references(() => users.id), // Always owner
+  requestedChanges: jsonb("requested_changes").notNull(), // Details of requested changes
+  status: text("status").notNull().default("pending"), // pending, accepted, rejected
+  tenantResponse: text("tenant_response"), // Optional message from tenant
+  respondedAt: timestamp("responded_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Contract termination requests table
+export const contractTerminationRequests = pgTable("contract_termination_requests", {
+  id: serial("id").primaryKey(),
+  contractId: integer("contract_id").notNull().references(() => contracts.id),
+  requestedBy: integer("requested_by").notNull().references(() => users.id), // Owner requesting early termination
+  reason: text("reason"), // Reason for termination request
+  status: text("status").notNull().default("pending"), // pending, accepted, rejected
+  tenantResponse: text("tenant_response"), // Optional message from tenant
+  respondedAt: timestamp("responded_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   properties: many(properties),
@@ -153,6 +187,16 @@ export const contractsRelations = relations(contracts, ({ one }) => ({
 
 export const notificationsRelations = relations(notifications, ({ one }) => ({
   user: one(users, { fields: [notifications.userId], references: [users.id] }),
+}));
+
+export const contractModificationRequestsRelations = relations(contractModificationRequests, ({ one }) => ({
+  contract: one(contracts, { fields: [contractModificationRequests.contractId], references: [contracts.id] }),
+  requestedBy: one(users, { fields: [contractModificationRequests.requestedBy], references: [users.id] }),
+}));
+
+export const contractTerminationRequestsRelations = relations(contractTerminationRequests, ({ one }) => ({
+  contract: one(contracts, { fields: [contractTerminationRequests.contractId], references: [contracts.id] }),
+  requestedBy: one(users, { fields: [contractTerminationRequests.requestedBy], references: [users.id] }),
 }));
 
 // Insert schemas
@@ -208,6 +252,16 @@ export const insertReviewSchema = createInsertSchema(reviews).omit({
   createdAt: true,
 });
 
+export const insertContractModificationRequestSchema = createInsertSchema(contractModificationRequests).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertContractTerminationRequestSchema = createInsertSchema(contractTerminationRequests).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -225,3 +279,7 @@ export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type Review = typeof reviews.$inferSelect;
 export type InsertReview = z.infer<typeof insertReviewSchema>;
+export type ContractModificationRequest = typeof contractModificationRequests.$inferSelect;
+export type InsertContractModificationRequest = z.infer<typeof insertContractModificationRequestSchema>;
+export type ContractTerminationRequest = typeof contractTerminationRequests.$inferSelect;
+export type InsertContractTerminationRequest = z.infer<typeof insertContractTerminationRequestSchema>;
