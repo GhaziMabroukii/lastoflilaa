@@ -36,7 +36,7 @@ export default function PropertyDetails() {
   const propertyId = params?.id ? parseInt(params.id) : 0;
 
   // Get current user from localStorage
-  const currentUser = JSON.parse(localStorage.getItem("user") || '{"id": 4, "userType": "tenant"}');
+  const currentUser = JSON.parse(localStorage.getItem("userData") || '{"id": 7, "userType": "tenant"}');
 
   const { data: property, isLoading, error } = useQuery({
     queryKey: ["/api/properties", propertyId],
