@@ -410,12 +410,12 @@ const Search = () => {
 
                   {/* Amenities */}
                   <div className="flex flex-wrap gap-1 mb-3">
-                    {property.amenities.slice(0, 3).map((amenity) => (
+                    {property.amenities?.slice(0, 3).map((amenity: string) => (
                       <Badge key={amenity} variant="outline" className="text-xs">
                         {getAmenityIcon(amenity)}
                       </Badge>
                     ))}
-                    {property.amenities.length > 3 && (
+                    {property.amenities && property.amenities.length > 3 && (
                       <Badge variant="outline" className="text-xs">
                         +{property.amenities.length - 3}
                       </Badge>
