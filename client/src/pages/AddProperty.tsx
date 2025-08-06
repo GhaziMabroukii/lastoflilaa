@@ -199,6 +199,14 @@ const AddProperty = () => {
       // Get current user data
       const currentUser = JSON.parse(localStorage.getItem("currentUser") || "{}");
       
+      console.log("Current user:", currentUser);
+      console.log("Form data before processing:", formData);
+
+      // Validate that we have a valid user
+      if (!currentUser.id) {
+        throw new Error("User not logged in");
+      }
+      
       // Prepare property data for API (ensuring correct types for Drizzle schema)
       const propertyData = {
         ownerId: currentUser.id,
@@ -211,7 +219,7 @@ const AddProperty = () => {
         rooms: formData.rooms ? parseInt(formData.rooms) : null,
         bathrooms: formData.bathrooms ? parseInt(formData.bathrooms) : null,
         address: formData.address,
-        amenities: formData.amenities,
+        amenities: formData.amenities.length > 0 ? formData.amenities : null,
         rules: formData.rules.length > 0 ? formData.rules : null,
         deposit: formData.pricing.deposit || null, // Keep as string for decimal type
         fees: formData.pricing.fees || null, // Keep as string for decimal type
@@ -219,6 +227,17 @@ const AddProperty = () => {
         utilitiesIncluded: formData.pricing.utilitiesIncluded,
         status: "Disponible"
       };
+
+      console.log("Property data being sent to API:", JSON.stringify(propertyData, null, 2));
+
+      // Debug: Let's also test the validation schema
+      try {
+        const { insertPropertySchema } = await import("@/../../shared/schema");
+        const validated = insertPropertySchema.parse(propertyData);
+        console.log("Frontend validation passed:", validated);
+      } catch (validationError) {
+        console.error("Frontend validation failed:", validationError);
+      }
 
       const response = await fetch("/api/properties", {
         method: "POST",
@@ -230,6 +249,7 @@ const AddProperty = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.log("API Error Response:", JSON.stringify(errorData, null, 2));
         throw new Error(errorData.error || "Failed to create property");
       }
 
