@@ -86,7 +86,11 @@ export function ContractActions({ contract, currentUserId, isOwner }: ContractAc
   const terminationRequestMutation = useMutation({
     mutationFn: async () => {
       return apiRequest(`/api/contracts/${contract.id}/request-termination`, {
-        method: 'POST'
+        method: 'POST',
+        body: JSON.stringify({
+          requestedBy: currentUserId,
+          reason: "Demande d'arrêt anticipé par le propriétaire"
+        })
       });
     },
     onSuccess: () => {
@@ -109,7 +113,11 @@ export function ContractActions({ contract, currentUserId, isOwner }: ContractAc
   const modificationRequestMutation = useMutation({
     mutationFn: async () => {
       return apiRequest(`/api/contracts/${contract.id}/request-modification`, {
-        method: 'POST'
+        method: 'POST',
+        body: JSON.stringify({
+          requestedBy: currentUserId,
+          requestedChanges: "Demande de modification des termes du contrat"
+        })
       });
     },
     onSuccess: () => {
