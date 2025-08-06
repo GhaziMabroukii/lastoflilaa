@@ -138,8 +138,30 @@ const ContractView = () => {
   console.log("Has contract?", !!contract);
   console.log("========================");
 
-  // Check if user has permission to view this contract
-  const currentUserId = 1; // Should come from auth context
+  // Get current user from localStorage (real session management)
+  const getCurrentUser = () => {
+    const userData = localStorage.getItem("userData");
+    const userId = localStorage.getItem("userId");
+    const userType = localStorage.getItem("userType");
+    
+    if (userData && userId && userType) {
+      try {
+        const user = JSON.parse(userData);
+        return {
+          id: parseInt(userId),
+          userType: userType,
+          ...user
+        };
+      } catch (error) {
+        console.error("Error parsing user data:", error);
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const currentUser = getCurrentUser();
+  const currentUserId = currentUser?.id || 0;
   
   // Only check permissions if we have a valid contract
   if (contract && contract.ownerId && contract.tenantId) {

@@ -11,13 +11,18 @@ export const queryClient = new QueryClient({
   },
 });
 
-// Default fetcher function for react-query
+// Default fetcher function for react-query with authentication
 export const apiRequest = async (url: string, options?: RequestInit) => {
   console.log("API Request:", url, options);
+  
+  // Get auth token from localStorage
+  const authToken = localStorage.getItem("authToken");
+  
   const response = await fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...(authToken && { 'Authorization': `Bearer ${authToken}` }),
       ...options?.headers,
     },
   });

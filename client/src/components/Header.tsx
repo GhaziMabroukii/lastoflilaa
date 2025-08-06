@@ -20,23 +20,26 @@ const Header = () => {
   useEffect(() => {
     const updateUserState = () => {
       const authStatus = localStorage.getItem("isAuthenticated");
-      const email = localStorage.getItem("userEmail");
-      let type = localStorage.getItem("userType");
+      const userData = localStorage.getItem("userData");
+      const userType = localStorage.getItem("userType");
       
-      // Auto-detect user type based on email if not set
-      if (!type && email) {
-        if (email === "tenant@test.com" || email.includes("student") || email.includes("etudiant")) {
-          type = "tenant";
-          localStorage.setItem("userType", "tenant");
-        } else {
-          type = "owner";
-          localStorage.setItem("userType", "owner");
+      if (authStatus && userData && userType) {
+        try {
+          const user = JSON.parse(userData);
+          setIsAuthenticated(true);
+          setUserEmail(user.email || user.username || "");
+          setUserType(userType);
+        } catch (error) {
+          console.error("Error parsing user data:", error);
+          setIsAuthenticated(false);
+          setUserEmail("");
+          setUserType("");
         }
+      } else {
+        setIsAuthenticated(false);
+        setUserEmail("");
+        setUserType("");
       }
-      
-      setIsAuthenticated(!!authStatus);
-      setUserEmail(email || "");
-      setUserType(type || "");
     };
 
     // Initial load
@@ -57,9 +60,13 @@ const Header = () => {
   }, []);
 
   const handleLogout = () => {
+    // Clear all authentication data
     localStorage.removeItem("isAuthenticated");
-    localStorage.removeItem("userEmail");
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("userData");
     localStorage.removeItem("userType");
+    localStorage.removeItem("userId");
+    localStorage.removeItem("userEmail");
     localStorage.removeItem("userProfile");
     localStorage.removeItem("user");
     setIsAuthenticated(false);
