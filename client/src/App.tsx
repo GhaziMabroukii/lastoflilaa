@@ -23,6 +23,7 @@ import UserProfile from "./pages/UserProfile";
 import EditProperty from "./pages/EditProperty";
 import MapView from "./pages/MapView";
 import Offers from "./pages/Offers";
+import TenantRequestResponse from "./pages/TenantRequestResponse";
 
 const queryClient = new QueryClient();
 
@@ -51,6 +52,7 @@ const App = () => (
           <Route path="/map" component={MapView} />
           <Route path="/notifications" component={Notifications} />
           <Route path="/offers" component={Offers} />
+          <Route path="/tenant-requests/:type/:id" component={TenantRequestResponse} />
           <Route component={NotFound} />
         </Switch>
       </Router>

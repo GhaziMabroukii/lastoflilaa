@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ContractStatusBadge } from "@/components/ContractStatusBadge";
-import { ContractActions } from "@/components/ContractActions";
+import { EnhancedContractActions } from "@/components/EnhancedContractActions";
 import { NotificationCenter } from "@/components/NotificationCenter";
+import { AutomaticTenantNavigation } from "@/components/AutomaticTenantNavigation";
+import { TenantRequestsDropdown } from "@/components/TenantRequestsDropdown";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -199,6 +201,10 @@ const ContractView = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <AutomaticTenantNavigation 
+        userId={currentUserId} 
+        userType={contract.ownerId === currentUserId ? 'owner' : 'tenant'} 
+      />
       <Header />
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-6">
@@ -210,11 +216,15 @@ const ContractView = () => {
             Retour
           </Button>
           <div className="flex items-center gap-4">
+            <TenantRequestsDropdown 
+              userId={currentUserId} 
+              userType={contract.ownerId === currentUserId ? 'owner' : 'tenant'} 
+            />
             <NotificationCenter userId={currentUserId} />
-            <ContractActions 
+            <EnhancedContractActions 
               contract={contract} 
               currentUserId={currentUserId} 
-              isOwner={contract.ownerId === currentUserId} 
+              userType={contract.ownerId === currentUserId ? 'owner' : 'tenant'} 
             />
           </div>
         </div>

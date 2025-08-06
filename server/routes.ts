@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertPropertySchema, insertOfferSchema, insertContractSchema, insertNotificationSchema, insertConversationSchema, insertMessageSchema, insertReviewSchema, insertContractModificationRequestSchema, insertContractTerminationRequestSchema, contracts, users, conversations, messages, reviews, properties, offers, contractModificationRequests, contractTerminationRequests } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 import { z } from "zod";
 
 // Alias tables for clarity in joins
@@ -963,6 +963,130 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error("Review creation error:", error);
       res.status(500).json({ error: "Failed to create review" });
+    }
+  });
+
+  // Get pending requests for a contract
+  app.get("/api/contracts/:id/pending-requests", async (req, res) => {
+    try {
+      const contractId = parseInt(req.params.id);
+      
+      // Get modification requests
+      const modificationRequests = await db
+        .select({
+          id: contractModificationRequests.id,
+          type: sql<string>`'modification'`,
+          status: contractModificationRequests.status,
+          createdAt: contractModificationRequests.createdAt,
+        })
+        .from(contractModificationRequests)
+        .where(eq(contractModificationRequests.contractId, contractId));
+
+      // Get termination requests
+      const terminationRequests = await db
+        .select({
+          id: contractTerminationRequests.id,
+          type: sql<string>`'termination'`,
+          status: contractTerminationRequests.status,
+          createdAt: contractTerminationRequests.createdAt,
+        })
+        .from(contractTerminationRequests)
+        .where(eq(contractTerminationRequests.contractId, contractId));
+
+      const allRequests = [...modificationRequests, ...terminationRequests];
+      res.json(allRequests);
+    } catch (error) {
+      console.error("Failed to fetch pending requests:", error);
+      res.status(500).json({ error: "Failed to fetch pending requests" });
+    }
+  });
+
+  // Get specific modification request
+  app.get("/api/contract-modification-requests/:id", async (req, res) => {
+    try {
+      const requestId = parseInt(req.params.id);
+      const [request] = await db
+        .select()
+        .from(contractModificationRequests)
+        .where(eq(contractModificationRequests.id, requestId));
+        
+      if (!request) {
+        return res.status(404).json({ error: "Request not found" });
+      }
+
+      res.json(request);
+    } catch (error) {
+      console.error("Failed to fetch modification request:", error);
+      res.status(500).json({ error: "Failed to fetch modification request" });
+    }
+  });
+
+  // Get specific termination request
+  app.get("/api/contract-termination-requests/:id", async (req, res) => {
+    try {
+      const requestId = parseInt(req.params.id);
+      const [request] = await db
+        .select()
+        .from(contractTerminationRequests)
+        .where(eq(contractTerminationRequests.id, requestId));
+        
+      if (!request) {
+        return res.status(404).json({ error: "Request not found" });
+      }
+
+      res.json(request);
+    } catch (error) {
+      console.error("Failed to fetch termination request:", error);
+      res.status(500).json({ error: "Failed to fetch termination request" });
+    }
+  });
+
+  // Get tenant's requests
+  app.get("/api/tenant-requests/:userId", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      
+      // Get all contracts where user is tenant
+      const userContracts = await db
+        .select({ id: contracts.id })
+        .from(contracts)
+        .where(eq(contracts.tenantId, userId));
+
+      if (userContracts.length === 0) {
+        return res.json([]);
+      }
+
+      const contractIds = userContracts.map(c => c.id);
+
+      // Get modification requests
+      const modificationRequests = await db
+        .select({
+          id: contractModificationRequests.id,
+          type: sql<string>`'modification'`,
+          status: contractModificationRequests.status,
+          createdAt: contractModificationRequests.createdAt,
+          contractId: contractModificationRequests.contractId,
+        })
+        .from(contractModificationRequests)
+        .where(eq(contractModificationRequests.contractId, contractIds[0])); // For now, just check first contract
+
+      // Get termination requests
+      const terminationRequests = await db
+        .select({
+          id: contractTerminationRequests.id,
+          type: sql<string>`'termination'`,
+          status: contractTerminationRequests.status,
+          createdAt: contractTerminationRequests.createdAt,
+          contractId: contractTerminationRequests.contractId,
+        })
+        .from(contractTerminationRequests)
+        .where(eq(contractTerminationRequests.contractId, contractIds[0])); // For now, just check first contract
+
+      const allRequests = [...modificationRequests, ...terminationRequests];
+      res.json(allRequests);
+    } catch (error) {
+      console.error("Failed to fetch tenant requests:", error);
+      res.status(500).json({ error: "Failed to fetch tenant requests" });
     }
   });
 
