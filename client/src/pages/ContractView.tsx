@@ -163,6 +163,12 @@ const ContractView = () => {
   const currentUser = getCurrentUser();
   const currentUserId = currentUser?.id || 0;
   
+  // Debug current user info
+  console.log("Current user from localStorage:", currentUser);
+  console.log("Current user ID:", currentUserId);
+  console.log("Contract owner ID:", contract?.ownerId);
+  console.log("Contract tenant ID:", contract?.tenantId);
+  
   // Only check permissions if we have a valid contract
   if (contract && contract.ownerId && contract.tenantId) {
     const canViewContract = (
@@ -170,6 +176,8 @@ const ContractView = () => {
       contract.tenantId === currentUserId
     );
 
+    console.log("Can view contract?", canViewContract);
+    
     if (!canViewContract) {
       return (
         <div className="min-h-screen bg-background">
