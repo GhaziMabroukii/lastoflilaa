@@ -19,45 +19,23 @@ export default function Offers() {
 
   // Get current user from localStorage
   const getCurrentUser = () => {
-    const user = localStorage.getItem("user");
-    let userType = localStorage.getItem("userType");
-    const userEmail = localStorage.getItem("userEmail");
+    const userData = localStorage.getItem("userData");
+    const userType = localStorage.getItem("userType");
     
-    // Auto-detect user type based on email if not set
-    if (!userType && userEmail) {
-      if (userEmail === "tenant@test.com" || userEmail.includes("student") || userEmail.includes("etudiant")) {
-        userType = "tenant";
-        localStorage.setItem("userType", "tenant");
-      } else {
-        userType = "owner"; 
-        localStorage.setItem("userType", "owner");
+    if (userData) {
+      try {
+        return JSON.parse(userData);
+      } catch (e) {
+        console.error("Error parsing userData:", e);
       }
     }
     
-    if (user) {
-      const parsedUser = JSON.parse(user);
-      // Ensure userType matches localStorage userType (in case of mismatch)
-      if (userType && parsedUser.userType !== userType) {
-        parsedUser.userType = userType;
-      }
-      return parsedUser;
+    // Fallback to valid user IDs that exist in database
+    if (userType === "tenant") {
+      return {"id": 7, "userType": "tenant"}; // sarah_tenant
+    } else {
+      return {"id": 6, "userType": "owner"}; // mohamed_owner
     }
-    
-    // If no user but userType exists, create user object
-    if (userType) {
-      return {
-        "id": userType === "tenant" ? 4 : 1, 
-        "userType": userType
-      };
-    }
-    
-    // Fallback: determine based on email
-    if (userEmail === "tenant@test.com" || userEmail?.includes("student") || userEmail?.includes("etudiant")) {
-      return {"id": 4, "userType": "tenant"};
-    }
-    
-    // Default to owner
-    return {"id": 1, "userType": "owner"};
   };
   
   const [currentUser, setCurrentUser] = useState(getCurrentUser());
