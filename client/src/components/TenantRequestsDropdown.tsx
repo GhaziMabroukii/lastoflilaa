@@ -23,6 +23,11 @@ export function TenantRequestsDropdown({ userId, userType }: TenantRequestsDropd
   const [, navigate] = useLocation();
   
   console.log("TenantRequestsDropdown: userType check:", userType, "userId:", userId);
+  console.log("TenantRequestsDropdown: Current localStorage:", {
+    isAuthenticated: localStorage.getItem("isAuthenticated"),
+    userData: localStorage.getItem("userData"),
+    userType: localStorage.getItem("userType")
+  });
   
   // Only show for tenants
   if (userType !== 'tenant') {
@@ -31,9 +36,10 @@ export function TenantRequestsDropdown({ userId, userType }: TenantRequestsDropd
   }
 
   // Fetch pending requests for this tenant
-  const { data: allRequests = [] } = useQuery<Request[]>({
+  const { data: allRequests = [], isLoading: requestsLoading } = useQuery<Request[]>({
     queryKey: [`/api/tenant-requests/${userId}`],
-    enabled: userType === 'tenant'
+    enabled: userType === 'tenant' && !!userId,
+    refetchInterval: 5000 // Refetch every 5 seconds for real-time updates
   });
 
   const pendingCount = allRequests.filter(r => r.status === 'pending').length;
@@ -92,7 +98,11 @@ export function TenantRequestsDropdown({ userId, userType }: TenantRequestsDropd
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         
-        {allRequests.length === 0 ? (
+        {requestsLoading ? (
+          <DropdownMenuItem disabled>
+            Chargement...
+          </DropdownMenuItem>
+        ) : allRequests.length === 0 ? (
           <DropdownMenuItem disabled>
             Aucune demande
           </DropdownMenuItem>
