@@ -281,11 +281,7 @@ export const insertContractModificationRequestSchema = createInsertSchema(contra
 export const insertContractTerminationRequestSchema = createInsertSchema(contractTerminationRequests).omit({
   id: true,
   createdAt: true,
-});
-
-export const insertContractTerminationRequestSchema = createInsertSchema(contractTerminationRequests).omit({
-  id: true,
-  createdAt: true,
+  respondedAt: true,
 });
 
 // Types
