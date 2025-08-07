@@ -663,6 +663,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Apply contract modifications - Owner can modify contract after modification request is pending
+  app.put("/api/contracts/:id/modify", async (req, res) => {
+    try {
+      const contractId = parseInt(req.params.id);
+      const { modifications, modificationRequestId } = req.body;
+      
+      const contract = await storage.getContract(contractId);
+      if (!contract) {
+        return res.status(404).json({ error: "Contract not found" });
+      }
+
+      // Only allow modifications for active contracts
+      if (contract.status !== 'active') {
+        return res.status(400).json({ error: "Can only modify active contracts" });
+      }
+
+      // Update contract data with modifications
+      const updatedContractData = { ...(contract.contractData || {}) };
+      
+      // Apply field modifications
+      if (modifications.tenant_name) updatedContractData.tenantName = modifications.tenant_name;
+      if (modifications.tenant_address) updatedContractData.propertyAddress = modifications.tenant_address;
+      if (modifications.monthly_rent) updatedContractData.monthlyRent = modifications.monthly_rent;
+      if (modifications.deposit) updatedContractData.deposit = modifications.deposit;
+      if (modifications.special_conditions) updatedContractData.specialConditions = modifications.special_conditions;
+      if (modifications.payment_terms) updatedContractData.paymentDueDate = modifications.payment_terms;
+      if (modifications.start_date) updatedContractData.startDate = modifications.start_date;
+      if (modifications.end_date) updatedContractData.endDate = modifications.end_date;
+
+      // Update contract in database
+      const [updatedContract] = await db
+        .update(contracts)
+        .set({
+          contractData: updatedContractData,
+          status: 'modified', // Set status to modified to indicate changes
+          updatedAt: new Date()
+        })
+        .where(eq(contracts.id, contractId))
+        .returning();
+
+      // Mark modification request as completed if provided
+      if (modificationRequestId) {
+        await db
+          .update(contractModificationRequests)
+          .set({
+            status: 'completed',
+            respondedAt: new Date()
+          })
+          .where(eq(contractModificationRequests.id, modificationRequestId));
+      }
+
+      // Notify tenant of completed modification
+      await storage.createNotification({
+        userId: contract.tenantId,
+        title: "Contrat modifié",
+        message: "Le propriétaire a appliqué les modifications demandées au contrat.",
+        type: "contract_modified",
+        relatedId: contractId,
+      });
+
+      res.json(updatedContract);
+    } catch (error) {
+      console.error("Contract modification error:", error);
+      res.status(500).json({ error: "Failed to modify contract" });
+    }
+  });
+
   // Get individual contract modification request
   app.get("/api/contract-modification-requests/:id", async (req, res) => {
     try {
