@@ -612,7 +612,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/contracts/:id/request-modification", async (req, res) => {
     try {
       const contractId = parseInt(req.params.id);
-      const { requestedBy, requestedChanges } = req.body;
+      const { requestedBy, requestedChanges, fieldsToModify, modificationReason } = req.body;
       
       const contract = await storage.getContract(contractId);
       if (!contract) {
@@ -629,6 +629,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Only the owner can request contract modifications" });
       }
 
+      // Validate required fields
+      if (!modificationReason || !fieldsToModify || fieldsToModify.length === 0) {
+        return res.status(400).json({ error: "Modification reason and fields to modify are required" });
+      }
+
       // Create modification request
       const [modificationRequest] = await db
         .insert(contractModificationRequests)
@@ -636,6 +641,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           contractId,
           requestedBy,
           requestedChanges,
+          fieldsToModify,
+          modificationReason,
           status: 'pending'
         })
         .returning();
@@ -644,7 +651,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.createNotification({
         userId: contract.tenantId,
         title: "Demande de modification de contrat",
-        message: "Le propriétaire demande des modifications au contrat. Veuillez examiner la demande.",
+        message: `Le propriétaire demande des modifications au contrat. Raison: ${modificationReason}. Champs à modifier: ${fieldsToModify.join(', ')}.`,
         type: "contract_modification_request",
         relatedId: contractId,
       });
@@ -759,7 +766,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/contracts/:id/request-termination", async (req, res) => {
     try {
       const contractId = parseInt(req.params.id);
-      const { requestedBy, reason } = req.body;
+      const { requestedBy, reason, detailedReason } = req.body;
       
       const contract = await storage.getContract(contractId);
       if (!contract) {
@@ -776,6 +783,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Only the owner can request early termination" });
       }
 
+      // Validate required reason
+      if (!reason) {
+        return res.status(400).json({ error: "Termination reason is required" });
+      }
+
       // Create termination request
       const [terminationRequest] = await db
         .insert(contractTerminationRequests)
@@ -783,6 +795,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           contractId,
           requestedBy,
           reason,
+          detailedReason,
           status: 'pending'
         })
         .returning();
@@ -791,7 +804,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.createNotification({
         userId: contract.tenantId,
         title: "Demande d'arrêt anticipé du contrat",
-        message: `Le propriétaire demande l'arrêt anticipé du contrat. Raison: ${reason || 'Non spécifiée'}`,
+        message: `Le propriétaire demande l'arrêt anticipé du contrat. Raison: ${reason}${detailedReason ? `. Détails: ${detailedReason}` : ''}`,
         type: "contract_termination_request",
         relatedId: contractId,
       });
@@ -1420,6 +1433,278 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Registration error:", error);
       res.status(500).json({ error: "Registration failed" });
+    }
+  });
+
+  // Get modification requests for a user (owner or tenant)
+  app.get("/api/modification-requests/:userId", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      const userType = req.query.userType as string;
+      
+      if (userType === 'owner') {
+        // Owner sees their sent modification requests
+        const requests = await db
+          .select({
+            id: contractModificationRequests.id,
+            contractId: contractModificationRequests.contractId,
+            requestedChanges: contractModificationRequests.requestedChanges,
+            fieldsToModify: contractModificationRequests.fieldsToModify,
+            modificationReason: contractModificationRequests.modificationReason,
+            status: contractModificationRequests.status,
+            tenantResponse: contractModificationRequests.tenantResponse,
+            respondedAt: contractModificationRequests.respondedAt,
+            createdAt: contractModificationRequests.createdAt,
+            property: {
+              title: properties.title,
+              address: properties.address,
+            },
+            tenant: {
+              firstName: users.firstName,
+              lastName: users.lastName,
+              email: users.email,
+            }
+          })
+          .from(contractModificationRequests)
+          .leftJoin(contracts, eq(contractModificationRequests.contractId, contracts.id))
+          .leftJoin(properties, eq(contracts.propertyId, properties.id))
+          .leftJoin(users, eq(contracts.tenantId, users.id))
+          .where(eq(contractModificationRequests.requestedBy, userId))
+          .orderBy(desc(contractModificationRequests.createdAt));
+        
+        res.json(requests);
+      } else {
+        // Tenant sees modification requests received for their contracts
+        const userContracts = await db
+          .select({ id: contracts.id })
+          .from(contracts)
+          .where(eq(contracts.tenantId, userId));
+        
+        if (userContracts.length === 0) {
+          return res.json([]);
+        }
+        
+        const contractIds = userContracts.map(c => c.id);
+        const requests = await db
+          .select({
+            id: contractModificationRequests.id,
+            contractId: contractModificationRequests.contractId,
+            requestedChanges: contractModificationRequests.requestedChanges,
+            fieldsToModify: contractModificationRequests.fieldsToModify,
+            modificationReason: contractModificationRequests.modificationReason,
+            status: contractModificationRequests.status,
+            tenantResponse: contractModificationRequests.tenantResponse,
+            respondedAt: contractModificationRequests.respondedAt,
+            createdAt: contractModificationRequests.createdAt,
+            property: {
+              title: properties.title,
+              address: properties.address,
+            },
+            owner: {
+              firstName: users.firstName,
+              lastName: users.lastName,
+              email: users.email,
+            }
+          })
+          .from(contractModificationRequests)
+          .leftJoin(contracts, eq(contractModificationRequests.contractId, contracts.id))
+          .leftJoin(properties, eq(contracts.propertyId, properties.id))
+          .leftJoin(users, eq(contractModificationRequests.requestedBy, users.id))
+          .where(inArray(contractModificationRequests.contractId, contractIds))
+          .orderBy(desc(contractModificationRequests.createdAt));
+        
+        res.json(requests);
+      }
+    } catch (error) {
+      console.error("Get modification requests error:", error);
+      res.status(500).json({ error: "Failed to fetch modification requests" });
+    }
+  });
+
+  // Get termination requests for a user (owner or tenant)
+  app.get("/api/termination-requests/:userId", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      const userType = req.query.userType as string;
+      
+      if (userType === 'owner') {
+        // Owner sees their sent termination requests
+        const requests = await db
+          .select({
+            id: contractTerminationRequests.id,
+            contractId: contractTerminationRequests.contractId,
+            reason: contractTerminationRequests.reason,
+            detailedReason: contractTerminationRequests.detailedReason,
+            status: contractTerminationRequests.status,
+            tenantResponse: contractTerminationRequests.tenantResponse,
+            respondedAt: contractTerminationRequests.respondedAt,
+            createdAt: contractTerminationRequests.createdAt,
+            property: {
+              title: properties.title,
+              address: properties.address,
+            },
+            tenant: {
+              firstName: users.firstName,
+              lastName: users.lastName,
+              email: users.email,
+            }
+          })
+          .from(contractTerminationRequests)
+          .leftJoin(contracts, eq(contractTerminationRequests.contractId, contracts.id))
+          .leftJoin(properties, eq(contracts.propertyId, properties.id))
+          .leftJoin(users, eq(contracts.tenantId, users.id))
+          .where(eq(contractTerminationRequests.requestedBy, userId))
+          .orderBy(desc(contractTerminationRequests.createdAt));
+        
+        res.json(requests);
+      } else {
+        // Tenant sees termination requests received for their contracts
+        const userContracts = await db
+          .select({ id: contracts.id })
+          .from(contracts)
+          .where(eq(contracts.tenantId, userId));
+        
+        if (userContracts.length === 0) {
+          return res.json([]);
+        }
+        
+        const contractIds = userContracts.map(c => c.id);
+        const requests = await db
+          .select({
+            id: contractTerminationRequests.id,
+            contractId: contractTerminationRequests.contractId,
+            reason: contractTerminationRequests.reason,
+            detailedReason: contractTerminationRequests.detailedReason,
+            status: contractTerminationRequests.status,
+            tenantResponse: contractTerminationRequests.tenantResponse,
+            respondedAt: contractTerminationRequests.respondedAt,
+            createdAt: contractTerminationRequests.createdAt,
+            property: {
+              title: properties.title,
+              address: properties.address,
+            },
+            owner: {
+              firstName: users.firstName,
+              lastName: users.lastName,
+              email: users.email,
+            }
+          })
+          .from(contractTerminationRequests)
+          .leftJoin(contracts, eq(contractTerminationRequests.contractId, contracts.id))
+          .leftJoin(properties, eq(contracts.propertyId, properties.id))
+          .leftJoin(users, eq(contractTerminationRequests.requestedBy, users.id))
+          .where(inArray(contractTerminationRequests.contractId, contractIds))
+          .orderBy(desc(contractTerminationRequests.createdAt));
+        
+        res.json(requests);
+      }
+    } catch (error) {
+      console.error("Get termination requests error:", error);
+      res.status(500).json({ error: "Failed to fetch termination requests" });
+    }
+  });
+
+  // Get contract versions (history) for a contract
+  app.get("/api/contracts/:id/versions", async (req, res) => {
+    try {
+      const contractId = parseInt(req.params.id);
+      
+      const versions = await db
+        .select()
+        .from(contractVersions)
+        .where(eq(contractVersions.contractId, contractId))
+        .orderBy(desc(contractVersions.version));
+      
+      res.json(versions);
+    } catch (error) {
+      console.error("Get contract versions error:", error);
+      res.status(500).json({ error: "Failed to fetch contract versions" });
+    }
+  });
+
+  // Complete contract modification - Owner modifies and signs, creates new version
+  app.post("/api/contracts/:id/complete-modification", async (req, res) => {
+    try {
+      const contractId = parseInt(req.params.id);
+      const { modificationRequestId, modifiedContractData, ownerSignature, userId } = req.body;
+      
+      const contract = await storage.getContract(contractId);
+      if (!contract) {
+        return res.status(404).json({ error: "Contract not found" });
+      }
+
+      // Only owner can complete modifications
+      if (contract.ownerId !== userId) {
+        return res.status(403).json({ error: "Only the owner can complete contract modifications" });
+      }
+
+      // Verify modification request exists and is accepted
+      const [modificationRequest] = await db
+        .select()
+        .from(contractModificationRequests)
+        .where(eq(contractModificationRequests.id, modificationRequestId));
+
+      if (!modificationRequest || modificationRequest.status !== 'accepted') {
+        return res.status(400).json({ error: "Valid accepted modification request required" });
+      }
+
+      // Get current version number
+      const existingVersions = await db
+        .select()
+        .from(contractVersions)
+        .where(eq(contractVersions.contractId, contractId))
+        .orderBy(desc(contractVersions.version));
+
+      const newVersion = existingVersions.length > 0 ? existingVersions[0].version + 1 : 1;
+
+      // Create new contract version
+      const [newContractVersion] = await db
+        .insert(contractVersions)
+        .values({
+          contractId,
+          version: newVersion,
+          contractData: modifiedContractData,
+          ownerSignature,
+          ownerSignedAt: new Date(),
+          status: 'owner_signed',
+          modificationReason: modificationRequest.modificationReason,
+        })
+        .returning();
+
+      // Update main contract with modified data and status
+      await db
+        .update(contracts)
+        .set({
+          contractData: modifiedContractData,
+          ownerSignature,
+          ownerSignedAt: new Date(),
+          tenantSignature: null, // Reset tenant signature
+          tenantSignedAt: null,
+          status: 'modification_in_progress',
+          modificationSummary: `Version ${newVersion} - ${modificationRequest.modificationReason}`,
+          updatedAt: new Date()
+        })
+        .where(eq(contracts.id, contractId));
+
+      // Update modification request status
+      await db
+        .update(contractModificationRequests)
+        .set({ status: 'modification_in_progress' })
+        .where(eq(contractModificationRequests.id, modificationRequestId));
+
+      // Notify tenant to sign the modified contract
+      await storage.createNotification({
+        userId: contract.tenantId,
+        title: "Contrat modifié - Signature requise",
+        message: `Le propriétaire a modifié le contrat (Version ${newVersion}). Veuillez examiner et signer la nouvelle version.`,
+        type: "contract_modification_ready",
+        relatedId: contractId,
+      });
+
+      res.status(201).json(newContractVersion);
+    } catch (error) {
+      console.error("Complete contract modification error:", error);
+      res.status(500).json({ error: "Failed to complete contract modification" });
     }
   });
 

@@ -152,7 +152,9 @@ export const contractModificationRequests = pgTable("contract_modification_reque
   contractId: integer("contract_id").notNull().references(() => contracts.id),
   requestedBy: integer("requested_by").notNull().references(() => users.id), // Always owner
   requestedChanges: jsonb("requested_changes").notNull(), // Details of requested changes
-  status: text("status").notNull().default("pending"), // pending, accepted, rejected
+  fieldsToModify: text("fields_to_modify").array(), // Fields owner wants to modify (name, cin, signature, address, etc.)
+  modificationReason: text("modification_reason").notNull(), // Reason for modification request
+  status: text("status").notNull().default("pending"), // pending, accepted, rejected, modification_in_progress, completed
   tenantResponse: text("tenant_response"), // Optional message from tenant
   respondedAt: timestamp("responded_at"),
   modificationDeadline: timestamp("modification_deadline"), // 24h from acceptance
@@ -164,7 +166,8 @@ export const contractTerminationRequests = pgTable("contract_termination_request
   id: serial("id").primaryKey(),
   contractId: integer("contract_id").notNull().references(() => contracts.id),
   requestedBy: integer("requested_by").notNull().references(() => users.id), // Owner requesting early termination
-  reason: text("reason"), // Reason for termination request
+  reason: text("reason").notNull(), // Reason for termination request (required)
+  detailedReason: text("detailed_reason"), // More detailed explanation
   status: text("status").notNull().default("pending"), // pending, accepted, rejected
   tenantResponse: text("tenant_response"), // Optional message from tenant
   respondedAt: timestamp("responded_at"),
@@ -269,6 +272,13 @@ export const insertReviewSchema = createInsertSchema(reviews).omit({
 });
 
 export const insertContractModificationRequestSchema = createInsertSchema(contractModificationRequests).omit({
+  id: true,
+  createdAt: true,
+  respondedAt: true,
+  modificationDeadline: true,
+});
+
+export const insertContractTerminationRequestSchema = createInsertSchema(contractTerminationRequests).omit({
   id: true,
   createdAt: true,
 });
