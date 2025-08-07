@@ -656,6 +656,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get individual contract modification request
+  app.get("/api/contract-modification-requests/:id", async (req, res) => {
+    try {
+      const requestId = parseInt(req.params.id);
+      
+      const [request] = await db
+        .select()
+        .from(contractModificationRequests)
+        .where(eq(contractModificationRequests.id, requestId));
+        
+      if (!request) {
+        return res.status(404).json({ error: "Modification request not found" });
+      }
+
+      res.json(request);
+    } catch (error) {
+      console.error("Get modification request error:", error);
+      res.status(500).json({ error: "Failed to fetch modification request" });
+    }
+  });
+
   // Respond to contract modification request - Tenant responds
   app.put("/api/contract-modification-requests/:id/respond", async (req, res) => {
     try {
@@ -769,6 +790,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Contract termination request error:", error);
       res.status(500).json({ error: "Failed to create termination request" });
+    }
+  });
+
+  // Get individual contract termination request
+  app.get("/api/contract-termination-requests/:id", async (req, res) => {
+    try {
+      const requestId = parseInt(req.params.id);
+      
+      const [request] = await db
+        .select()
+        .from(contractTerminationRequests)
+        .where(eq(contractTerminationRequests.id, requestId));
+        
+      if (!request) {
+        return res.status(404).json({ error: "Termination request not found" });
+      }
+
+      res.json(request);
+    } catch (error) {
+      console.error("Get termination request error:", error);
+      res.status(500).json({ error: "Failed to fetch termination request" });
     }
   });
 

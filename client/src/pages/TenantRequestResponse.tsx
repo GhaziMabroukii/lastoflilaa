@@ -53,9 +53,27 @@ export default function TenantRequestResponse() {
   const currentUser = getUserData();
   
   // Fetch request details
-  const { data: request, isLoading } = useQuery<Request>({
+  const { data: request, isLoading, error } = useQuery<Request>({
     queryKey: [`/api/contract-${requestType}-requests/${requestId}`],
-    enabled: !!requestId && !!currentUser
+    enabled: !!requestId && !!currentUser,
+    queryFn: async () => {
+      console.log("TenantRequestResponse: Making API request to", `/api/contract-${requestType}-requests/${requestId}`);
+      const response = await fetch(`/api/contract-${requestType}-requests/${requestId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch request');
+      }
+      const data = await response.json();
+      console.log("TenantRequestResponse: Received request data", data);
+      return data;
+    }
+  });
+  
+  console.log("TenantRequestResponse: Query state:", { 
+    request, 
+    isLoading, 
+    error, 
+    enabled: !!requestId && !!currentUser,
+    queryKey: `/api/contract-${requestType}-requests/${requestId}`
   });
 
   // Fetch contract details
