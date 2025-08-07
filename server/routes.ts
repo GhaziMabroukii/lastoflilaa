@@ -368,18 +368,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // ENFORCEMENT: Additional check for contracts that might not be expired yet
-      const activeContracts = await db
+      // ENFORCEMENT: Additional check for contracts that might not be expired yet OR waiting for modification
+      const blockedContracts = await db
         .select()
         .from(contracts)
         .where(
           and(
             eq(contracts.propertyId, validatedData.propertyId),
-            eq(contracts.status, 'active')
+            or(
+              eq(contracts.status, 'active'),
+              eq(contracts.status, 'waiting_for_modification')
+            )
           )
         );
       
-      if (activeContracts.length > 0) {
+      if (blockedContracts.length > 0) {
+        const contract = blockedContracts[0];
+        if (contract.status === 'waiting_for_modification') {
+          return res.status(400).json({
+            error: "Cette propriété a un contrat en attente de modification. Vous devez d'abord terminer le processus de modification avant de créer un nouveau contrat.",
+            details: "Contract modification in progress prevents new contract creation"
+          });
+        }
         return res.status(400).json({
           error: "Un contrat actif existe déjà pour cette propriété. Vous devez attendre soit l'expiration naturelle du contrat, soit obtenir l'accord du locataire pour un arrêt anticipé.",
           details: "Active contract prevents new contract creation"
@@ -660,6 +670,130 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Contract modification request error:", error);
       res.status(500).json({ error: "Failed to create modification request" });
+    }
+  });
+
+  // SECURE CONTRACT MODIFICATION - Apply only requested field modifications  
+  app.put("/api/contracts/:id/apply-modification", async (req, res) => {
+    try {
+      const contractId = parseInt(req.params.id);
+      const { modifications, modificationRequestId, userId } = req.body;
+      
+      const contract = await storage.getContract(contractId);
+      if (!contract) {
+        return res.status(404).json({ error: "Contract not found" });
+      }
+
+      // SECURITY: Verify user is the owner
+      if (contract.ownerId !== userId) {
+        return res.status(403).json({ error: "Only the property owner can modify contracts" });
+      }
+
+      // Verify this is in modification state
+      if (contract.status !== 'waiting_for_modification') {
+        return res.status(400).json({ error: "Contract is not in modification state" });
+      }
+
+      // Get the accepted modification request
+      const [request] = await db
+        .select()
+        .from(contractModificationRequests)
+        .where(
+          and(
+            eq(contractModificationRequests.id, modificationRequestId),
+            eq(contractModificationRequests.contractId, contractId),
+            eq(contractModificationRequests.status, 'accepted')
+          )
+        );
+
+      if (!request) {
+        return res.status(400).json({ error: "No accepted modification request found" });
+      }
+
+      // SECURITY: Parse allowed fields and only allow modification of those fields
+      let allowedFields: string[] = [];
+      try {
+        if (typeof request.fieldsToModify === 'string') {
+          allowedFields = JSON.parse(request.fieldsToModify);
+        } else if (Array.isArray(request.fieldsToModify)) {
+          allowedFields = request.fieldsToModify;
+        }
+      } catch (error) {
+        return res.status(400).json({ error: "Invalid fields to modify format" });
+      }
+
+      // SECURITY: Validate that only requested fields are being modified
+      const allowedModifications: any = {};
+      const fieldMapping: Record<string, string> = {
+        'tenant_name': 'tenantName',
+        'tenant_address': 'propertyAddress', 
+        'monthly_rent': 'monthlyRent',
+        'deposit': 'deposit',
+        'start_date': 'startDate',
+        'end_date': 'endDate',
+        'payment_due_date': 'paymentDueDate',
+        'special_conditions': 'specialConditions'
+      };
+
+      for (const fieldId of allowedFields) {
+        const contractField = fieldMapping[fieldId];
+        if (contractField && modifications.hasOwnProperty(fieldId)) {
+          allowedModifications[contractField] = modifications[fieldId];
+        }
+      }
+
+      // Apply only allowed modifications to contract
+      const currentData = contract.contractData;
+      const updatedData = { ...currentData, ...allowedModifications };
+
+      // Update contract with new data and reset signatures
+      const [updatedContract] = await db
+        .update(contracts)
+        .set({
+          contractData: updatedData,
+          ownerSignature: null,
+          tenantSignature: null,
+          ownerSignedAt: null,
+          tenantSignedAt: null,
+          status: 'draft',
+          tenantSignDeadline: null,
+          updatedAt: new Date()
+        })
+        .where(eq(contracts.id, contractId))
+        .returning();
+
+      // Mark modification request as completed
+      await db
+        .update(contractModificationRequests)
+        .set({
+          status: 'completed',
+          completedAt: new Date()
+        })
+        .where(eq(contractModificationRequests.id, modificationRequestId));
+
+      // Create new contract version for history
+      await db.insert(contractVersions).values({
+        contractId: contractId,
+        version: 2, // Incremental version
+        contractData: updatedData,
+        changeReason: `Modification sécurisée - Champs: ${allowedFields.join(', ')} - ${request.modificationReason}`,
+        changedBy: contract.ownerId,
+        changedAt: new Date()
+      });
+
+      // Notify tenant of completed modification
+      await storage.createNotification({
+        userId: contract.tenantId,
+        title: "Contrat modifié",
+        message: `Le propriétaire a appliqué les modifications demandées au contrat (champs: ${allowedFields.join(', ')}).`,
+        type: "contract_modified",
+        relatedId: contractId,
+      });
+
+      res.json(updatedContract);
+    } catch (error) {
+      console.error("Secure contract modification error:", error);
+      res.status(500).json({ error: "Failed to modify contract" });
     }
   });
 

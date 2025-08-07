@@ -130,11 +130,12 @@ export function EnhancedContractActions({ contract, currentUserId, userType }: C
   // Contract modification mutation (for when modification is approved)
   const contractModificationMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest(`/api/contracts/${contract.id}/modify`, {
+      return apiRequest(`/api/contracts/${contract.id}/apply-modification`, {
         method: 'PUT',
         body: JSON.stringify({
           modifications: contractModifications,
-          modificationRequestId: modificationRequest?.id
+          modificationRequestId: modificationRequest?.id,
+          userId: currentUserId
         })
       });
     },
@@ -478,17 +479,50 @@ export function EnhancedContractActions({ contract, currentUserId, userType }: C
               Modifier le Contrat
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-4">
-              <p>
-                Modifiez les champs demandés dans la demande de modification.
-                {modificationRequest && (
-                  <span className="block mt-1 text-sm text-gray-600">
-                    Champs à modifier: {Array.isArray(modificationRequest.fieldsToModify) ? 
-                      modificationRequest.fieldsToModify.join(', ') : 
-                      (typeof modificationRequest.fieldsToModify === 'string' ? 
-                        JSON.parse(modificationRequest.fieldsToModify || '[]').join(', ') : 
-                        'N/A')}
-                  </span>
-                )}
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center">
+                    <span className="text-orange-600 text-sm font-bold">⚠</span>
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-orange-800 font-semibold text-sm mb-2">
+                      Restriction de sécurité
+                    </h4>
+                    <p className="text-orange-700 text-sm mb-3">
+                      Vous ne pouvez modifier <strong>que les champs demandés</strong> par le locataire. 
+                      Toute autre modification est strictement interdite pour des raisons de sécurité.
+                    </p>
+                    {modificationRequest && (
+                      <div className="bg-white rounded-md p-3 border border-orange-200">
+                        <p className="text-xs font-medium text-orange-800 mb-2">
+                          Champs autorisés à modifier :
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {(Array.isArray(modificationRequest.fieldsToModify) ? 
+                            modificationRequest.fieldsToModify : 
+                            (typeof modificationRequest.fieldsToModify === 'string' ? 
+                              JSON.parse(modificationRequest.fieldsToModify || '[]') : 
+                              [])).map((fieldId: string) => (
+                            <span key={fieldId} className="inline-flex items-center px-2 py-1 bg-orange-100 text-orange-800 text-xs font-medium rounded-full">
+                              {fieldId === 'tenant_name' && '👤 Nom du locataire'}
+                              {fieldId === 'tenant_address' && '📍 Adresse du locataire'}  
+                              {fieldId === 'monthly_rent' && '💰 Loyer mensuel'}
+                              {fieldId === 'deposit' && '🏦 Caution'}
+                              {fieldId === 'start_date' && '📅 Date de début'}
+                              {fieldId === 'end_date' && '📅 Date de fin'}
+                              {fieldId === 'payment_due_date' && '📋 Date d\'échéance'}
+                              {fieldId === 'special_conditions' && '📝 Conditions spéciales'}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              <p className="text-sm text-gray-600 mb-4">
+                Modifiez uniquement les champs ci-dessus. Les signatures seront automatiquement supprimées et le contrat devra être re-signé par les deux parties.
               </p>
               
               <div className="space-y-4">
