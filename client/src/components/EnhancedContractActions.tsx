@@ -101,7 +101,7 @@ export function EnhancedContractActions({ contract, currentUserId, userType }: C
         method: 'POST',
         body: JSON.stringify({
           requestedBy: currentUserId,
-          reason: modificationReason,
+          modificationReason: modificationReason,
           fieldsToModify: selectedFields,
           requestedChanges: `Modification demandée pour: ${selectedFields.join(', ')}. Raison: ${modificationReason}`
         })

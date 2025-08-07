@@ -1,166 +1,92 @@
 # replit.md
 
 ## Overview
-
-Ekrili is a modern property rental platform specifically designed for the Tunisian market, focusing on students and families. The application features intelligent search capabilities with geolocation, real-time messaging, secure contract management, and flexible pricing models. Built as a full-stack web application using React frontend with Express.js backend, it provides comprehensive property management, user authentication, and integrated communication tools.
+Ekrili is a modern property rental platform for the Tunisian market, focusing on students and families. It offers intelligent search with geolocation, real-time messaging, secure contract management, and flexible pricing. Built as a full-stack web application using React and Express.js, it provides comprehensive property management, user authentication, and integrated communication tools. The project aims to streamline property rentals with advanced features and a user-friendly experience.
 
 ## User Preferences
-
 Preferred communication style: Simple, everyday language.
 
 ## System Architecture
+### Frontend
+- **Framework**: React 18 with TypeScript (SPA)
+- **Routing**: Wouter
+- **State Management**: TanStack React Query
+- **UI Components**: shadcn/ui (built on Radix UI)
+- **Styling**: Tailwind CSS with custom glassmorphism and Tunisian-inspired palette
+- **Build Tool**: Vite
 
-### Frontend Architecture
-- **Framework**: React 18 with TypeScript in SPA (Single Page Application) architecture
-- **Routing**: Wouter for lightweight client-side routing
-- **State Management**: TanStack React Query for server state management
-- **UI Components**: shadcn/ui component library built on Radix UI primitives
-- **Styling**: Tailwind CSS with custom design system featuring glassmorphism effects and Tunisian-inspired color palette
-- **Build Tool**: Vite for fast development and optimized production builds
-
-### Backend Architecture
-- **Runtime**: Node.js with Express.js framework
+### Backend
+- **Runtime**: Node.js with Express.js
 - **Language**: TypeScript with ES modules
-- **Architecture Pattern**: RESTful API with modular route organization
-- **Storage Interface**: Abstracted storage layer with in-memory implementation for development
-- **Development Setup**: Hot module replacement with Vite integration for seamless full-stack development
+- **Architecture**: RESTful API with modular routes
+- **Storage**: Abstracted storage layer (in-memory for development)
+- **Development**: Hot module replacement with Vite integration
 
-### Database Layer
-- **ORM**: Drizzle ORM for type-safe database operations
-- **Schema Management**: Centralized schema definitions in `/shared` directory
-- **Validation**: Zod integration for runtime type validation
-- **Migration System**: Drizzle Kit for database schema migrations
+### Database
+- **ORM**: Drizzle ORM for type-safe operations
+- **Schema Management**: Centralized definitions in `/shared`
+- **Validation**: Zod for runtime type validation
+- **Migration System**: Drizzle Kit
 
 ### Authentication & Authorization
 - **Client-side**: localStorage-based session management
-- **User Types**: Role-based system supporting tenants and property owners
-- **Profile Management**: Comprehensive user profiles with verification badges
+- **User Types**: Role-based (tenants, property owners)
+- **Profile Management**: Comprehensive user profiles with verification
 
 ### UI/UX Design System
-- **Design Philosophy**: Neo-brutalism with glassmorphism elements
-- **Color Scheme**: HSL-based system with Tunisian cultural influences (warm orange-red primary, Mediterranean blue secondary)
+- **Design Philosophy**: Neo-brutalism with glassmorphism
+- **Color Scheme**: HSL-based with Tunisian cultural influences (warm orange-red primary, Mediterranean blue secondary)
 - **Typography**: Modern sans-serif with gradient text effects
-- **Components**: Consistent design language across form inputs, buttons, cards, and navigation elements
+- **Components**: Consistent design across all elements
 
-### Key Features Architecture
-- **Property Management**: CRUD operations with image upload, amenities tracking, and availability management
-- **Search System**: Advanced filtering with geolocation, price ranges, and category-based search
-- **Messaging**: Real-time chat interface with message history and file sharing capabilities
-- **Contract Management**: French legal contract creation with CIN fields, electronic signatures (owner first, then tenant), and proper tenant identification using name/email/phone
-- **Notification System**: User preference-based notification settings with multiple delivery channels
-
-### Recent Contract Updates (August 2025)
-- **Complete Workflow Implementation**: Full contract lifecycle from creation to activation with real-time notifications
-- **3-Day Expiration System**: Automatic contract expiration if tenant doesn't sign within 3 days of owner signature
-- **Real-time Notifications**: Live notification system with 5-second polling for instant updates between owner and tenant
-- **Property Status Automation**: Properties automatically switch from "Disponible" to "Loué" when contracts become active
-- **Contract Modification**: Full contract editing capability with signature reset and notifications to both parties
-- **PDF Download**: Secure PDF generation for fully signed contracts with unique filenames
-- **Duplicate Prevention**: System prevents multiple active contracts for the same property
-- **Scheduled Cleanup**: Hourly background job to automatically expire overdue contracts and reset property status
-- **French Legal Structure**: Contracts follow authentic French rental agreement format with CIN fields
-- **Enhanced Status Management**: Comprehensive status tracking (draft, owner_signed, fully_signed, active, expired, cancelled)
-
-### Proper Offer-to-Contract Workflow (August 2025)
-- **Secure Contract Creation**: Only owners can create contracts, only after receiving contract requests from tenants
-- **Offer Management**: Complete offers page for both sent and received offers with status tracking
-- **Contract Request System**: Tenants can request contracts only after their offers are accepted by owners
-- **Role-Based Access**: Tenants cannot create contracts directly, ensuring proper business logic flow
-- **Notification Integration**: Real-time notifications for offer acceptance, contract requests, and contract creation
-- **Navigation Integration**: Offers page integrated into main navigation for easy access
-
-### Role-Based UI & Notifications (August 2025)
-- **Tenant Experience**: "Faire une offre" button only visible to tenants on property details
-- **Owner Experience**: "Faire une offre" button hidden for property owners
-- **Context-Specific Notifications**: Tenants receive "Nouvelle offre envoyée" notifications, owners receive "Nouvelle offre reçue"
-- **Navigation Labels**: Owners see "Mes offres reçues", tenants see "Mes offres envoyées"
-- **API Filtering**: Proper user-type based offer filtering ensures correct data display for each role
-- **Dual Notifications**: Both tenant and owner receive appropriate notifications when offers are created
-
-### Advanced Contract Management UI Implementation (August 2025) ✅ COMPLETE
-- **Contract Management Buttons**: Added early termination and modification request buttons to ContractActions component
-- **Authentication Fix**: Fixed frontend to properly send currentUserId with management requests
-- **Status Management**: Contract properly set to 'active' status for management features to work
-- **Prettier Error Messages**: Implemented ErrorAlert component with informative, styled error displays
-- **Request Validation**: Backend properly validates owner permissions for termination and modification requests
-- **Notification Integration**: Management requests create proper notifications for tenants
-- **User Experience**: Buttons show clear explanations and confirmations before sending requests
-
-### Complete Offer Workflow Implementation (August 2025) ✅ COMPLETE
-- **Full Workflow Logic**: Complete implementation of tenant offer workflow - tenant views property → makes offer → owner accepts/rejects → tenant can request contract
-- **Automatic Role-Based UI**: System automatically detects user type and shows appropriate interface without manual switching
-- **Duplicate Prevention**: Tenants cannot create multiple pending offers for the same property; system prevents duplicate pending offers
-- **Real-time Status Updates**: Property details page shows offer status (pending, accepted, rejected, contract requested) with appropriate UI states
-- **Smart Offer Management**: After rejection, tenants can create new offers; after acceptance, contract request workflow begins
-- **Contract Request Button**: Appears only when offer is accepted, allowing tenant to request contract creation
-- **Status-Based Notifications**: Both parties receive real-time notifications for offer creation, acceptance, rejection, and contract requests
-- **Visual Status Indicators**: Color-coded status cards (yellow for pending, green for accepted, red for rejected, blue for contract requested)
-- **Role-Based UI Logic**: Tenants automatically see "Mes offres envoyées", owners automatically see "Mes offres reçues" with proper filtering and display logic
-- **Proper Error Handling**: Server prevents duplicate offers with clear error messages and client-side validation
-- **Testing Verified**: Complete workflow tested and working - offers created successfully with proper tenant/owner separation
-
-### Database Population & Testing Infrastructure (August 2025) ✅ COMPLETE
-- **Complete Mock Data**: Database populated with 5 users (2 owners, 3 tenants), 6 realistic properties across Tunis area, 4 offers with different statuses, and 1 sample contract
-- **Automatic User Type Detection**: System automatically determines user type from email patterns (student/etudiant emails → tenant, others → owner) without manual switching
-- **Comprehensive Test Data**: Properties include studios, apartments, villas with realistic pricing (180-1200 DT/month), addresses, amenities, and high-quality images
-- **Full Workflow Testing**: All features now testable with realistic data - property browsing, offer creation, contract signing, role-based interfaces
-- **Error Handling Improvements**: Fixed ContractGenerator null reference errors with proper loading states and error boundaries
-
-### Replit Migration & Production Deployment (August 2025) ✅ COMPLETE
-- **Environment Migration**: Successfully migrated from Replit Agent to standard Replit environment with full compatibility
-- **Database Integration**: PostgreSQL database properly configured with Neon serverless driver and all tables created
-- **Authentication System**: Complete role-based authentication with session tokens that embed user type and ID for security
-- **Real User Sessions**: Implemented secure user type separation using session tokens instead of localStorage-only authentication
-- **Production-Ready Setup**: All dependencies installed, workflows configured, and application serving on port 5000 with proper error handling
-- **User Type Validation**: Smart user type detection during registration based on email patterns with proper tenant/owner separation
-- **Security Hardening**: Proper request validation, error handling, and user session management with token-based authentication
-- **Migration Completed**: Final migration from Replit Agent to standard Replit environment completed successfully with tsx dependency installed, PostgreSQL database provisioned, schema migrations applied, and application fully functional
-
-### Contract Management Request UI Fix (August 2025) ✅ COMPLETE
-- **Tenant Request Visibility Issue**: Fixed critical bug where tenant could not see contract modification and termination requests in "Mes demandes" dropdown
-- **Backend API Enhancement**: Updated `/api/tenant-requests/:userId` endpoint to properly query all user contracts using `inArray()` instead of only checking first contract
-- **Frontend Query Fix**: Implemented explicit queryFn in TenantRequestsDropdown component to ensure proper API communication and data fetching
-- **Real-time Updates**: Tenant now properly receives and can interact with owner-initiated contract management requests (modification and early termination)
-- **Complete Workflow**: Tenants can now accept/decline management requests through proper navigation to dedicated response pages
-- **Testing Verified**: Full workflow tested with modification request - tenant receives notification, sees request in dropdown, can navigate to response page
-
-### Advanced Contract Management System (August 2025) ✅ COMPLETE
-- **Contract Creation Restrictions**: System prevents creation of new contracts when an active contract already exists for the property
-- **Contract Modification Requests**: Owners can request contract modifications from tenants; modifications only proceed with tenant approval
-- **Early Termination Workflow**: Owners can request early contract termination; requires tenant acceptance to proceed immediately
-- **Enhanced Property Categorization**: Properties can be tagged with categories (Famille, Étudiant, Maison d'été, Vue sur mer, Proche de la plage) and geographic highlights
-- **Automatic Status Management**: Properties automatically switch between "Disponible" and "Loué" based on contract lifecycle
-- **Notification System**: Real-time notifications for modification requests, termination requests, and responses
-- **Contract Timer System**: Contracts have natural expiration dates; new contracts blocked until expiration or early termination
-- **Legal Compliance**: All contract operations follow French rental agreement requirements with proper tenant/owner workflow separation
+### Key Features
+- **Property Management**: CRUD operations, image upload, amenities, availability.
+- **Search System**: Advanced filtering by geolocation, price, category.
+- **Messaging**: Real-time chat with history and file sharing.
+- **Contract Management**:
+    - French legal contract creation with CIN fields, electronic signatures (owner then tenant).
+    - Full lifecycle from creation to activation with real-time notifications.
+    - 3-day expiration if tenant doesn't sign.
+    - Properties switch status (Disponible/Loué) based on contract activity.
+    - Modification capability with signature reset.
+    - Secure PDF generation for signed contracts.
+    - Prevents multiple active contracts for same property.
+    - Hourly background job for expiring contracts.
+    - Owners create contracts only after tenant requests.
+    - Modification/termination requests by owners require tenant approval.
+- **Notification System**: User preference-based, multi-channel delivery.
+- **Offer Management**:
+    - Complete offers page for sent/received offers with status tracking.
+    - Tenants can request contracts only after offers are accepted.
+    - Prevents duplicate pending offers from tenants.
+    - Real-time status updates and notifications for offer lifecycle (creation, acceptance, rejection, contract request).
+- **Role-Based UI**: Dynamic interface elements and notifications based on user role (tenant/owner).
 
 ## External Dependencies
+### Core Frameworks
+- **React Ecosystem**: React 18, React DOM, Wouter
+- **State Management**: TanStack React Query
+- **Form Handling**: React Hook Form with Hookform Resolvers
 
-### Core Framework Dependencies
-- **React Ecosystem**: React 18, React DOM, React Router (Wouter)
-- **State Management**: TanStack React Query for server state caching and synchronization
-- **Form Handling**: React Hook Form with Hookform Resolvers for validation
-
-### UI Component Libraries
-- **Radix UI**: Complete set of unstyled, accessible components including dialogs, dropdowns, tooltips, and form elements
+### UI & Styling
+- **Radix UI**: Accessible UI primitives
 - **Styling**: Tailwind CSS, PostCSS, Autoprefixer
-- **Icons**: Lucide React for consistent iconography
-- **Utilities**: clsx and tailwind-merge for conditional CSS classes, class-variance-authority for component variants
+- **Icons**: Lucide React
+- **Utilities**: clsx, tailwind-merge, class-variance-authority
 
 ### Database & Backend
 - **Database**: PostgreSQL with Neon Database serverless driver
-- **ORM**: Drizzle ORM with Drizzle Kit for migrations
-- **Validation**: Zod for schema validation and Drizzle-Zod integration
-- **Session Management**: connect-pg-simple for PostgreSQL session storage
+- **ORM**: Drizzle ORM with Drizzle Kit
+- **Validation**: Zod, Drizzle-Zod
+- **Session Management**: connect-pg-simple (PostgreSQL session storage)
 
 ### Development Tools
-- **Build System**: Vite with React plugin and runtime error overlay
-- **TypeScript**: Full TypeScript support across frontend and backend
-- **Development Experience**: Replit-specific plugins for enhanced development workflow
-- **Date Handling**: date-fns for date manipulation and formatting
+- **Build System**: Vite (with React plugin)
+- **Language Support**: TypeScript
+- **Date Handling**: date-fns
 
 ### Specialized Features
-- **Carousel**: Embla Carousel React for image galleries
-- **Command Interface**: cmdk for search and command functionality
-- **Digital Signatures**: React Signature Canvas for contract signing
-- **Utility Libraries**: nanoid for unique ID generation, various utility functions for common operations
+- **Carousel**: Embla Carousel React
+- **Command Interface**: cmdk
+- **Digital Signatures**: React Signature Canvas
+- **Utilities**: nanoid
