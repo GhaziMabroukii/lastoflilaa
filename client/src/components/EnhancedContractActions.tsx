@@ -34,6 +34,8 @@ interface RequestStatus {
   type: 'modification' | 'termination';
   status: 'pending' | 'accepted' | 'rejected';
   createdAt: string;
+  fieldsToModify?: string[];
+  modificationReason?: string;
 }
 
 export function EnhancedContractActions({ contract, currentUserId, userType }: ContractActionsProps) {
@@ -304,23 +306,23 @@ export function EnhancedContractActions({ contract, currentUserId, userType }: C
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-              
-              {/* Modify Contract Button - appears when modification is accepted */}
-              {modificationRequest.status === 'accepted' && (
-                <Button
-                  onClick={() => setShowModifyContractDialog(true)}
-                  disabled={contractModificationMutation.isPending}
-                  className="w-full bg-green-600 hover:bg-green-700"
-                  size="sm"
-                >
-                  <Edit className="w-3 h-3 mr-2" />
-                  Modifier le contrat
-                  {contractModificationMutation.isPending && (
-                    <RefreshCw className="w-3 h-3 ml-2 animate-spin" />
-                  )}
-                </Button>
-              )}
             </div>
+          )}
+
+          {/* Modify Contract Button - appears when modification is accepted OR contract is waiting for modification */}
+          {((modificationRequest && modificationRequest.status === 'accepted') || contract.status === 'waiting_for_modification') && (
+            <Button
+              onClick={() => setShowModifyContractDialog(true)}
+              disabled={contractModificationMutation.isPending}
+              className="w-full bg-green-600 hover:bg-green-700 mt-2"
+              size="sm"
+            >
+              <Edit className="w-3 h-3 mr-2" />
+              Modifier le contrat
+              {contractModificationMutation.isPending && (
+                <RefreshCw className="w-3 h-3 ml-2 animate-spin" />
+              )}
+            </Button>
           )}
         </div>
       </div>
