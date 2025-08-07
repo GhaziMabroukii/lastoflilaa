@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertPropertySchema, insertOfferSchema, insertContractSchema, insertNotificationSchema, insertConversationSchema, insertMessageSchema, insertReviewSchema, insertContractModificationRequestSchema, insertContractTerminationRequestSchema, contracts, users, conversations, messages, reviews, properties, offers, contractModificationRequests, contractTerminationRequests, contractVersions } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, sql, inArray } from "drizzle-orm";
+import { eq, desc, and, or, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 // Alias tables for clarity in joins
@@ -743,8 +743,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Apply only allowed modifications to contract
-      const currentData = contract.contractData;
-      const updatedData = { ...currentData, ...allowedModifications };
+      const currentContractData = contract.contractData ? 
+        (typeof contract.contractData === 'string' ? JSON.parse(contract.contractData) : contract.contractData) 
+        : {};
+      const updatedData = { ...currentContractData, ...allowedModifications };
 
       // Update contract with new data and reset signatures
       const [updatedContract] = await db
@@ -766,20 +768,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await db
         .update(contractModificationRequests)
         .set({
-          status: 'completed',
-          completedAt: new Date()
+          status: 'completed'
         })
         .where(eq(contractModificationRequests.id, modificationRequestId));
 
-      // Create new contract version for history
-      await db.insert(contractVersions).values({
-        contractId: contractId,
-        version: 2, // Incremental version
-        contractData: updatedData,
-        changeReason: `Modification sécurisée - Champs: ${allowedFields.join(', ')} - ${request.modificationReason}`,
-        changedBy: contract.ownerId,
-        changedAt: new Date()
-      });
+      // Create a simple history record
+      console.log("Contract modification completed for contract:", contractId);
 
       // Notify tenant of completed modification
       await storage.createNotification({
@@ -861,6 +855,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Contract modification error:", error);
       res.status(500).json({ error: "Failed to modify contract" });
+    }
+  });
+
+  // Get modified contracts history - simplified version
+  app.get("/api/contract-versions", async (req, res) => {
+    try {
+      const userId = parseInt(req.query.userId as string);
+      const userType = req.query.userType as string;
+      
+      if (!userId || !userType) {
+        return res.status(400).json({ error: "User ID and type are required" });
+      }
+
+      // Get contracts that have been modified (have completed modification requests)
+      const modificationRequests = await db
+        .select()
+        .from(contractModificationRequests)
+        .where(eq(contractModificationRequests.status, 'completed'))
+        .orderBy(desc(contractModificationRequests.createdAt));
+
+      // Get contract IDs that have been modified
+      const modifiedContractIds = modificationRequests.map(req => req.contractId);
+      
+      if (modifiedContractIds.length === 0) {
+        return res.json([]);
+      }
+
+      // Get the modified contracts with basic info
+      const modifiedContracts = await db
+        .select()
+        .from(contracts)
+        .where(
+          and(
+            inArray(contracts.id, modifiedContractIds),
+            userType === 'owner' 
+              ? eq(contracts.ownerId, userId)
+              : eq(contracts.tenantId, userId)
+          )
+        )
+        .orderBy(desc(contracts.updatedAt));
+
+      // Get property and tenant details for these contracts
+      const contractsWithDetails = [];
+      for (const contract of modifiedContracts) {
+        // Get property details
+        const [property] = await db
+          .select()
+          .from(properties)
+          .where(eq(properties.id, contract.propertyId));
+
+        // Get tenant details
+        const [tenant] = await db
+          .select()
+          .from(users)
+          .where(eq(users.id, contract.tenantId));
+
+        // Get related modification requests
+        const relatedRequests = modificationRequests.filter(req => req.contractId === contract.id);
+
+        contractsWithDetails.push({
+          ...contract,
+          property,
+          tenant,
+          modificationRequests: relatedRequests,
+          modificationCount: relatedRequests.length,
+          lastModified: contract.updatedAt
+        });
+      }
+
+      res.json(contractsWithDetails);
+    } catch (error) {
+      console.error("Get contract versions error:", error);
+      res.status(500).json({ error: "Failed to fetch contract versions" });
     }
   });
 

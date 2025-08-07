@@ -46,6 +46,20 @@ const Contracts = () => {
   // Fetch contracts
   const { data: contracts = [], isLoading: contractsLoading } = useQuery({
     queryKey: ['/api/contracts'],
+    queryFn: () => apiRequest('/api/contracts?' + new URLSearchParams({
+      userId: currentUserId.toString(),
+      ownerOnly: (userType === 'owner').toString()
+    })),
+    enabled: !!currentUserId
+  });
+
+  // Fetch contract versions for modified contracts history
+  const { data: contractVersions = [] } = useQuery({
+    queryKey: ['/api/contract-versions'],
+    queryFn: () => apiRequest('/api/contract-versions?' + new URLSearchParams({
+      userId: currentUserId.toString(),
+      userType: userType
+    })),
     enabled: !!currentUserId
   });
   
@@ -109,8 +123,8 @@ const Contracts = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "Actif": return "success";
-      case "En attente de signature": return "warning";
+      case "Actif": return "default";
+      case "En attente de signature": return "secondary";
       case "En cours de négociation": return "secondary";
       case "Expiré": return "destructive";
       case "Résilié": return "outline";
@@ -120,9 +134,9 @@ const Contracts = () => {
 
   const getPaymentStatusColor = (status: string) => {
     switch (status) {
-      case "À jour": return "success";
+      case "À jour": return "default";
       case "En retard": return "destructive";
-      case "En attente": return "warning";
+      case "En attente": return "secondary";
       default: return "outline";
     }
   };
@@ -341,14 +355,13 @@ const Contracts = () => {
 
         {/* Main Content with Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="contracts">Mes Contrats</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="contracts">Mes Contrats ({(contracts as any[]).length})</TabsTrigger>
             <TabsTrigger value="modification-requests">
-              {userType === 'owner' ? 'Demandes de modification envoyées' : 'Demandes de modification reçues'}
+              Demandes ({(modificationRequests.length || 0) + (terminationRequests.length || 0)})
             </TabsTrigger>
-            <TabsTrigger value="termination-requests">
-              {userType === 'owner' ? 'Demandes d\'arrêt envoyées' : 'Demandes d\'arrêt reçues'}
-            </TabsTrigger>
+            <TabsTrigger value="history">Contrats Modifiés ({contractVersions.length})</TabsTrigger>
+            <TabsTrigger value="create">Nouveau Contrat</TabsTrigger>
           </TabsList>
           
           <TabsContent value="contracts" className="space-y-4 mt-6">
@@ -618,6 +631,146 @@ const Contracts = () => {
                   </CardContent>
                 </Card>
               ))
+            )}
+          </TabsContent>
+          {/* Contract History Tab */}
+          <TabsContent value="history" className="space-y-4 mt-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Historique des Contrats Modifiés</h2>
+              <Badge variant="outline" className="px-3 py-1">
+                {contractVersions.length} contrat(s) modifié(s)
+              </Badge>
+            </div>
+            
+            {contractVersions.length === 0 ? (
+              <Card className="glass-card">
+                <CardContent className="p-8 text-center">
+                  <Edit className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-medium mb-2">Aucun contrat modifié</h3>
+                  <p className="text-muted-foreground">
+                    Aucun contrat n'a été modifié depuis sa création. 
+                    Tous les contrats modifiés apparaîtront ici avec l'historique complet des changements.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {(contractVersions as any[]).map((contractHistory: any) => {
+                  const contractData = contractHistory.contractData ? 
+                    (typeof contractHistory.contractData === 'string' ? 
+                      JSON.parse(contractHistory.contractData) : 
+                      contractHistory.contractData) : {};
+                  
+                  return (
+                    <Card key={contractHistory.id} className="glass-card">
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <CardTitle className="flex items-center space-x-2">
+                              <FileText className="h-5 w-5 text-primary" />
+                              <span>{contractHistory.property?.title || "Propriété"}</span>
+                              <Badge variant="outline" className="ml-2">
+                                {contractHistory.modificationCount} modification(s)
+                              </Badge>
+                            </CardTitle>
+                            <p className="text-muted-foreground">
+                              {contractHistory.property?.address} • 
+                              Locataire: {contractHistory.tenant?.firstName} {contractHistory.tenant?.lastName}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm text-muted-foreground">Dernière modification</p>
+                            <p className="font-medium">
+                              {contractHistory.lastModified ? 
+                                new Date(contractHistory.lastModified).toLocaleDateString('fr-FR', {
+                                  day: 'numeric',
+                                  month: 'long',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })
+                                : 'N/A'
+                              }
+                            </p>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      
+                      <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                          <div className="flex items-center space-x-2">
+                            <DollarSign className="h-4 w-4 text-accent" />
+                            <div>
+                              <p className="text-sm text-muted-foreground">Loyer mensuel</p>
+                              <p className="font-medium">{contractData.monthlyRent || 'N/A'} TND</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Calendar className="h-4 w-4 text-primary" />
+                            <div>
+                              <p className="text-sm text-muted-foreground">Période</p>
+                              <p className="font-medium">
+                                {contractData.startDate ? new Date(contractData.startDate).toLocaleDateString('fr-FR') : 'N/A'} - 
+                                {contractData.endDate ? new Date(contractData.endDate).toLocaleDateString('fr-FR') : 'N/A'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <ContractStatusBadge status={contractHistory.status} />
+                          </div>
+                        </div>
+                        
+                        {/* Modification History */}
+                        {contractHistory.modificationRequests && contractHistory.modificationRequests.length > 0 && (
+                          <div className="border-t pt-4 mt-4">
+                            <h4 className="font-medium mb-3 flex items-center space-x-2">
+                              <Clock className="h-4 w-4" />
+                              <span>Historique des modifications</span>
+                            </h4>
+                            <div className="space-y-2">
+                              {contractHistory.modificationRequests.map((request: any, index: number) => (
+                                <div key={request.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                                  <div>
+                                    <p className="font-medium text-sm">
+                                      {request.modificationReason || 'Modification du contrat'}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {request.fieldsToModify && typeof request.fieldsToModify === 'string' ? 
+                                        `Champs modifiés: ${JSON.parse(request.fieldsToModify).join(', ')}` :
+                                        'Modification générale'
+                                      }
+                                    </p>
+                                  </div>
+                                  <div className="text-right">
+                                    <Badge variant="secondary" className="text-xs">
+                                      {request.status === 'completed' ? 'Terminée' : request.status}
+                                    </Badge>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      {new Date(request.createdAt).toLocaleDateString('fr-FR')}
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        <div className="flex space-x-2 mt-4">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => navigate(`/contracts/${contractHistory.id}`)}
+                            className="flex items-center space-x-1"
+                          >
+                            <Eye className="h-4 w-4" />
+                            <span>Voir détails</span>
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
             )}
           </TabsContent>
         </Tabs>
