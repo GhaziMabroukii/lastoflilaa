@@ -81,18 +81,80 @@ export default function ContractsDashboard() {
     enabled: !!currentUserId && !!userType, // Only fetch if user is logged in and userType is set
   });
 
-  // Categorize contracts by status
-  const activeContracts = contracts.filter(contract => 
+  // Categorize contracts by status with more detailed filtering
+  const activeContracts = contracts.filter((contract: Contract) => 
     ['active', 'fully_signed', 'owner_signed', 'draft', 'waiting_for_modification'].includes(contract.status)
   );
   
-  const terminatedContracts = contracts.filter(contract => 
+  const terminatedContracts = contracts.filter((contract: Contract) => 
     contract.status === 'terminated'
   );
   
-  const modifiedContracts = contracts.filter(contract => 
+  const modifiedContracts = contracts.filter((contract: Contract) => 
     contract.status === 'modified' || contract.modificationSummary?.includes('Version')
   );
+
+  // Further categorize active contracts for better display
+  const pendingOwnerSignature = activeContracts.filter((c: Contract) => c.status === 'draft' && !c.ownerSignature);
+  const pendingTenantSignature = activeContracts.filter((c: Contract) => c.status === 'owner_signed' && !c.tenantSignature);
+  const fullySignedContracts = activeContracts.filter((c: Contract) => c.status === 'fully_signed' || c.status === 'active');
+  const waitingForModification = activeContracts.filter((c: Contract) => c.status === 'waiting_for_modification');
+
+  // Helper function to get signature status
+  const getSignatureStatus = (contract: Contract) => {
+    if (contract.ownerSignature && contract.tenantSignature) {
+      return {
+        status: 'fully_signed',
+        text: 'Signé par les deux parties',
+        color: 'text-green-600',
+        bgColor: 'bg-green-50',
+        icon: '✓'
+      };
+    } else if (contract.ownerSignature && !contract.tenantSignature) {
+      return {
+        status: 'pending_tenant',
+        text: 'En attente de signature du locataire',
+        color: 'text-yellow-600',
+        bgColor: 'bg-yellow-50',
+        icon: '⏳'
+      };
+    } else if (!contract.ownerSignature) {
+      return {
+        status: 'pending_owner',
+        text: 'En attente de signature du propriétaire',
+        color: 'text-orange-600',
+        bgColor: 'bg-orange-50',
+        icon: '📝'
+      };
+    }
+    return {
+      status: 'draft',
+      text: 'Brouillon',
+      color: 'text-gray-600',
+      bgColor: 'bg-gray-50',
+      icon: '📄'
+    };
+  };
+
+  // Helper function to get next action
+  const getNextAction = (contract: Contract) => {
+    if (contract.status === 'waiting_for_modification') {
+      return 'Modification en cours';
+    }
+    if (!contract.ownerSignature && contract.ownerId === currentUserId) {
+      return 'Votre signature requise';
+    }
+    if (contract.ownerSignature && !contract.tenantSignature && contract.ownerId !== currentUserId) {
+      return 'Votre signature requise';
+    }
+    if (contract.ownerSignature && !contract.tenantSignature && contract.ownerId === currentUserId) {
+      return 'En attente du locataire';
+    }
+    if (contract.ownerSignature && contract.tenantSignature) {
+      return 'Contrat actif';
+    }
+    return 'Action inconnue';
+  };
 
   // Debug logging
   console.log('ContractsDashboard Debug:', {
@@ -197,6 +259,11 @@ export default function ContractsDashboard() {
           <TabsTrigger value="active" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
             Contrats Actifs ({activeContracts.length})
+            {pendingOwnerSignature.length + pendingTenantSignature.length > 0 && (
+              <Badge variant="secondary" className="ml-1 text-xs">
+                {pendingOwnerSignature.length + pendingTenantSignature.length} en attente
+              </Badge>
+            )}
           </TabsTrigger>
           <TabsTrigger value="terminated" className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4" />
@@ -229,70 +296,140 @@ export default function ContractsDashboard() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-4">
-              {activeContracts.map((contract) => (
-            <Card key={contract.id} className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <CardTitle className="text-lg">
-                        {getContractTitle(contract)}
-                      </CardTitle>
-                      <ContractStatusBadge 
-                        status={contract.status} 
-                        tenantSignDeadline={contract.tenantSignDeadline}
-                      />
-                      <Badge variant="outline" className="text-xs">
-                        {getContractRole(contract)}
-                      </Badge>
+            <div className="space-y-6">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card className="border-orange-200 bg-orange-50/50">
+                  <CardContent className="p-4 text-center">
+                    <div className="text-2xl font-bold text-orange-600">
+                      {pendingOwnerSignature.length}
                     </div>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <span>Contrat #{contract.id}</span>
-                      <span>Créé le {format(new Date(contract.createdAt), 'dd MMM yyyy', { locale: fr })}</span>
-                      {contract.tenantSignDeadline && contract.status === 'owner_signed' && (
-                        <span className="text-yellow-600 font-medium">
-                          Échéance: {format(new Date(contract.tenantSignDeadline), 'dd MMM yyyy HH:mm', { locale: fr })}
-                        </span>
+                    <div className="text-sm text-muted-foreground">En attente propriétaire</div>
+                  </CardContent>
+                </Card>
+                <Card className="border-yellow-200 bg-yellow-50/50">
+                  <CardContent className="p-4 text-center">
+                    <div className="text-2xl font-bold text-yellow-600">
+                      {pendingTenantSignature.length}
+                    </div>
+                    <div className="text-sm text-muted-foreground">En attente locataire</div>
+                  </CardContent>
+                </Card>
+                <Card className="border-green-200 bg-green-50/50">
+                  <CardContent className="p-4 text-center">
+                    <div className="text-2xl font-bold text-green-600">
+                      {fullySignedContracts.length}
+                    </div>
+                    <div className="text-sm text-muted-foreground">Entièrement signés</div>
+                  </CardContent>
+                </Card>
+                <Card className="border-blue-200 bg-blue-50/50">
+                  <CardContent className="p-4 text-center">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {waitingForModification.length}
+                    </div>
+                    <div className="text-sm text-muted-foreground">En modification</div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Contract List */}
+              <div className="grid gap-4">
+                {activeContracts.map((contract: Contract) => {
+                  const signatureStatus = getSignatureStatus(contract);
+                  const nextAction = getNextAction(contract);
+                  
+                  return (
+                    <Card key={contract.id} className="hover:shadow-md transition-shadow">
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <CardTitle className="text-lg">
+                                {getContractTitle(contract)}
+                              </CardTitle>
+                              <ContractStatusBadge 
+                                status={contract.status} 
+                                tenantSignDeadline={contract.tenantSignDeadline}
+                              />
+                              <Badge variant="outline" className="text-xs">
+                                {getContractRole(contract)}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
+                              <span>Contrat #{contract.id}</span>
+                              <span>Créé le {format(new Date(contract.createdAt), 'dd MMM yyyy', { locale: fr })}</span>
+                              {contract.tenantSignDeadline && contract.status === 'owner_signed' && (
+                                <span className="text-yellow-600 font-medium">
+                                  Échéance: {format(new Date(contract.tenantSignDeadline), 'dd MMM yyyy HH:mm', { locale: fr })}
+                                </span>
+                              )}
+                            </div>
+                            
+                            {/* Signature Status */}
+                            <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${signatureStatus.bgColor} ${signatureStatus.color} mb-2`}>
+                              <span className="text-base">{signatureStatus.icon}</span>
+                              {signatureStatus.text}
+                            </div>
+                            
+                            {/* Next Action */}
+                            <div className="text-sm font-medium text-blue-600">
+                              📋 Action suivante: {nextAction}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => navigate(`/contract/${contract.id}`)}
+                            >
+                              <Eye className="h-4 w-4 mr-2" />
+                              Voir
+                            </Button>
+                            {canModifyContract(contract) && userType === 'owner' && (
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => navigate(`/create-contract?edit=${contract.id}`)}
+                              >
+                                <Edit className="h-4 w-4 mr-2" />
+                                Modifier
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </CardHeader>
+                      {contract.contractData?.propertyAddress && (
+                        <CardContent className="pt-0">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">📍 Adresse:</span>
+                              <p className="font-medium">{contract.contractData.propertyAddress}</p>
+                            </div>
+                            {contract.contractData?.monthlyRent && (
+                              <div>
+                                <span className="text-muted-foreground">💰 Loyer:</span>
+                                <p className="font-medium">{contract.contractData.monthlyRent}€/mois</p>
+                              </div>
+                            )}
+                            <div>
+                              <span className="text-muted-foreground">👥 Signatures:</span>
+                              <div className="flex gap-2 mt-1">
+                                <Badge variant={contract.ownerSignature ? "default" : "secondary"} className="text-xs">
+                                  Propriétaire {contract.ownerSignature ? "✓" : "✗"}
+                                </Badge>
+                                <Badge variant={contract.tenantSignature ? "default" : "secondary"} className="text-xs">
+                                  Locataire {contract.tenantSignature ? "✓" : "✗"}
+                                </Badge>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
                       )}
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => navigate(`/contract/${contract.id}`)}
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      Voir
-                    </Button>
-                    {canModifyContract(contract) && userType === 'owner' && (
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => navigate(`/create-contract?edit=${contract.id}`)}
-                      >
-                        <Edit className="h-4 w-4 mr-2" />
-                        Modifier
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </CardHeader>
-              {contract.contractData?.propertyAddress && (
-                <CardContent className="pt-0">
-                  <p className="text-sm text-muted-foreground">
-                    📍 {contract.contractData.propertyAddress}
-                  </p>
-                  {contract.contractData?.monthlyRent && (
-                    <p className="text-sm font-medium mt-1">
-                      💰 {contract.contractData.monthlyRent}€/mois
-                    </p>
-                  )}
-                </CardContent>
-              )}
-            </Card>
-          ))}
+                    </Card>
+                  );
+                })}
+              </div>
             </div>
           )}
         </TabsContent>
@@ -310,7 +447,7 @@ export default function ContractsDashboard() {
             </Card>
           ) : (
             <div className="grid gap-4">
-              {terminatedContracts.map((contract) => (
+              {terminatedContracts.map((contract: Contract) => (
                 <Card key={contract.id} className="hover:shadow-md transition-shadow border-red-200">
                   <CardHeader>
                     <div className="flex justify-between items-start">
@@ -372,7 +509,7 @@ export default function ContractsDashboard() {
             </Card>
           ) : (
             <div className="grid gap-4">
-              {modifiedContracts.map((contract) => (
+              {modifiedContracts.map((contract: Contract) => (
                 <Card key={contract.id} className="hover:shadow-md transition-shadow border-blue-200">
                   <CardHeader>
                     <div className="flex justify-between items-start">
