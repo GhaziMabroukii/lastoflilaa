@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
+import { useQuery } from '@tanstack/react-query';
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   FileText, 
   Plus,
@@ -19,90 +21,43 @@ import {
   Home,
   Clock,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Filter,
+  Search,
+  ArrowUpDown
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { ContractStatusBadge } from "@/components/ContractStatusBadge";
+import { EnhancedContractActions } from "@/components/EnhancedContractActions";
 
 const Contracts = () => {
-  const [contracts, setContracts] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [userType, setUserType] = useState("");
+  const [activeTab, setActiveTab] = useState("contracts");
   const [, navigate] = useLocation();
   const { toast } = useToast();
-
-  // Mock contracts data
-  const mockTenantContracts = [
-    {
-      id: 1,
-      propertyTitle: "Studio moderne près INSAT",
-      propertyLocation: "Ariana, Raoued",
-      landlord: "Ahmed Karim",
-      landlordPhone: "+216 98 765 432",
-      startDate: "2024-02-01",
-      endDate: "2024-08-01",
-      monthlyRent: 450,
-      deposit: 450,
-      status: "Actif",
-      signedDate: "2024-01-15",
-      contractUrl: "/contracts/contract-001.pdf",
-      paymentStatus: "À jour",
-      nextPaymentDue: "2024-03-01"
-    },
-    {
-      id: 2,
-      propertyTitle: "Chambre étudiante",
-      propertyLocation: "Tunis, Manouba",
-      landlord: "Leila Mansouri",
-      landlordPhone: "+216 55 123 456",
-      startDate: "2023-09-01",
-      endDate: "2024-06-30",
-      monthlyRent: 380,
-      deposit: 380,
-      status: "En attente de signature",
-      signedDate: null,
-      contractUrl: "/contracts/contract-002.pdf",
-      paymentStatus: "En attente",
-      nextPaymentDue: "2024-03-01"
-    }
-  ];
-
-  const mockOwnerContracts = [
-    {
-      id: 1,
-      propertyTitle: "Villa familiale avec jardin",
-      propertyLocation: "Sidi Bou Saïd",
-      tenant: "Famille Gharbi",
-      tenantPhone: "+216 22 333 444",
-      startDate: "2023-01-01",
-      endDate: "2024-12-31",
-      monthlyRent: 1200,
-      deposit: 1200,
-      status: "Actif",
-      signedDate: "2022-12-15",
-      contractUrl: "/contracts/contract-villa-001.pdf",
-      paymentStatus: "À jour",
-      nextPaymentDue: "2024-03-01",
-      totalRevenue: 14400
-    },
-    {
-      id: 2,
-      propertyTitle: "Studio étudiant meublé",
-      propertyLocation: "Tunis, Manouba",
-      tenant: "Amira Ben Said",
-      tenantPhone: "+216 98 111 222",
-      startDate: "2024-01-15",
-      endDate: "2024-07-15",
-      monthlyRent: 480,
-      deposit: 480,
-      status: "En cours de négociation",
-      signedDate: null,
-      contractUrl: "/contracts/contract-studio-002.pdf",
-      paymentStatus: "En attente",
-      nextPaymentDue: "2024-03-01",
-      totalRevenue: 960
-    }
-  ];
+  
+  // Get user authentication
+  const currentUserId = Number(localStorage.getItem("userId"));
+  const userType = localStorage.getItem("userType") as 'tenant' | 'owner';
+  
+  // Fetch contracts
+  const { data: contracts = [], isLoading: contractsLoading } = useQuery({
+    queryKey: ['/api/contracts'],
+    enabled: !!currentUserId
+  });
+  
+  // Fetch contract modification requests
+  const { data: modificationRequests = [], isLoading: modRequestsLoading } = useQuery({
+    queryKey: ['/api/contract-modification-requests'],
+    enabled: !!currentUserId
+  });
+  
+  // Fetch contract termination requests  
+  const { data: terminationRequests = [], isLoading: termRequestsLoading } = useQuery({
+    queryKey: ['/api/contract-termination-requests'],
+    enabled: !!currentUserId
+  });
 
   useEffect(() => {
     // Check authentication
@@ -111,26 +66,32 @@ const Contracts = () => {
       navigate("/login");
       return;
     }
-
-    const type = localStorage.getItem("userType") || "";
-    setUserType(type);
-
-    // Load contracts based on user type
-    if (type === "owner") {
-      setContracts(mockOwnerContracts);
-    } else {
-      setContracts(mockTenantContracts);
-    }
   }, [navigate]);
 
-  const filteredContracts = contracts.filter(contract => {
-    const searchField = userType === "owner" ? contract.tenant : contract.landlord;
-    const matchesSearch = contract.propertyTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         contract.propertyLocation.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         (searchField && searchField.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesStatus = !statusFilter || statusFilter === "all" || contract.status === statusFilter;
+  // Filter contracts based on search and status
+  const filteredContracts = (contracts as any[]).filter((contract: any) => {
+    const contractData = contract.contractData ? JSON.parse(contract.contractData) : {};
+    const propertyTitle = contractData.propertyTitle || '';
+    const tenantName = contractData.tenantName || '';
+    const ownerName = contractData.landlordName || '';
+    
+    const matchesSearch = propertyTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         tenantName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         ownerName.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesStatus = statusFilter === "" || contract.status === statusFilter;
+    
     return matchesSearch && matchesStatus;
   });
+  
+  // Filter requests based on user type
+  const userModificationRequests = (modificationRequests as any[]).filter((req: any) => 
+    userType === 'owner' ? req.requestedBy !== currentUserId : req.requestedBy === currentUserId
+  );
+  
+  const userTerminationRequests = (terminationRequests as any[]).filter((req: any) => 
+    userType === 'owner' ? req.requestedBy !== currentUserId : req.requestedBy === currentUserId
+  );
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -157,13 +118,7 @@ const Contracts = () => {
   };
 
   const signContract = (contractId: number) => {
-    const updatedContracts = contracts.map(contract => 
-      contract.id === contractId 
-        ? { ...contract, status: "Actif", signedDate: new Date().toISOString().split('T')[0] }
-        : contract
-    );
-    setContracts(updatedContracts);
-    
+    // This will be handled by the contract signing component
     toast({
       title: "Contrat signé",
       description: "Le contrat a été signé numériquement avec succès",
@@ -187,11 +142,17 @@ const Contracts = () => {
 
   // Calculate stats
   const stats = {
-    totalContracts: contracts.length,
-    activeContracts: contracts.filter(c => c.status === "Actif").length,
-    pendingContracts: contracts.filter(c => c.status.includes("attente") || c.status.includes("négociation")).length,
-    totalRevenue: userType === "owner" ? contracts.reduce((sum, c) => sum + (c.totalRevenue || 0), 0) : 0,
-    monthlyPayments: contracts.filter(c => c.status === "Actif").reduce((sum, c) => sum + c.monthlyRent, 0)
+    totalContracts: (contracts as any[]).length,
+    activeContracts: (contracts as any[]).filter((c: any) => c.status === "active").length,
+    pendingContracts: (contracts as any[]).filter((c: any) => c.status === "owner_signed" || c.status === "draft").length,
+    totalRevenue: userType === "owner" ? (contracts as any[]).reduce((sum: number, c: any) => {
+      const contractData = c.contractData ? JSON.parse(c.contractData) : {};
+      return sum + (parseFloat(contractData.monthlyRent) || 0);
+    }, 0) : 0,
+    monthlyPayments: (contracts as any[]).filter((c: any) => c.status === "active").reduce((sum: number, c: any) => {
+      const contractData = c.contractData ? JSON.parse(c.contractData) : {};
+      return sum + (parseFloat(contractData.monthlyRent) || 0);
+    }, 0)
   };
 
   return (
@@ -206,7 +167,7 @@ const Contracts = () => {
               <span>Mes Contrats</span>
             </h1>
             <p className="text-muted-foreground">
-              {contracts.length} contrat(s) {userType === "owner" ? "propriétaire" : "locataire"}
+              {(contracts as any[]).length} contrat(s) {userType === "owner" ? "propriétaire" : "locataire"}
             </p>
           </div>
           {userType === "owner" && (
@@ -300,94 +261,111 @@ const Contracts = () => {
           </CardContent>
         </Card>
 
-        {/* Contracts List */}
-        <div className="space-y-4">
-          {filteredContracts.map((contract) => (
+        {/* Main Content with Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="contracts">Mes Contrats</TabsTrigger>
+            <TabsTrigger value="modification-requests">
+              {userType === 'owner' ? 'Demandes de modification reçues' : 'Mes demandes de modification'}
+            </TabsTrigger>
+            <TabsTrigger value="termination-requests">
+              {userType === 'owner' ? 'Demandes de résiliation reçues' : 'Mes demandes de résiliation'}
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="contracts" className="space-y-4 mt-6">
+            {contractsLoading ? (
+              <div className="text-center py-8">Chargement des contrats...</div>
+            ) : filteredContracts.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Aucun contrat trouvé
+              </div>
+            ) : (
+              filteredContracts.map((contract: any) => (
             <Card key={contract.id} className="glass-card">
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    {/* Header */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <h3 className="font-semibold text-lg flex items-center space-x-2">
-                          <Home className="h-4 w-4" />
-                          <span>{contract.propertyTitle}</span>
-                        </h3>
-                        <p className="text-muted-foreground text-sm">{contract.propertyLocation}</p>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Badge variant={getStatusColor(contract.status) as any}>
-                          {contract.status}
-                        </Badge>
-                        <Badge variant={getPaymentStatusColor(contract.paymentStatus) as any}>
-                          {contract.paymentStatus}
-                        </Badge>
-                      </div>
-                    </div>
+                    {(() => {
+                      const contractData = contract.contractData ? JSON.parse(contract.contractData) : {};
+                      return (
+                        <>
+                          {/* Header */}
+                          <div className="flex items-start justify-between mb-4">
+                            <div>
+                              <h3 className="font-semibold text-lg flex items-center space-x-2">
+                                <Home className="h-4 w-4" />
+                                <span>{contractData.propertyTitle || 'Propriété'}</span>
+                              </h3>
+                              <p className="text-muted-foreground text-sm">{contractData.propertyAddress || 'Adresse non disponible'}</p>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <ContractStatusBadge status={contract.status} />
+                            </div>
+                          </div>
 
-                    {/* Details */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                      <div>
-                        <p className="text-sm text-muted-foreground">
-                          {userType === "owner" ? "Locataire" : "Propriétaire"}
-                        </p>
-                        <p className="font-medium flex items-center space-x-1">
-                          <User className="h-3 w-3" />
-                          <span>{userType === "owner" ? contract.tenant : contract.landlord}</span>
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {userType === "owner" ? contract.tenantPhone : contract.landlordPhone}
-                        </p>
-                      </div>
+                          {/* Details */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <div>
+                              <p className="text-sm text-muted-foreground">
+                                {userType === "owner" ? "Locataire" : "Propriétaire"}
+                              </p>
+                              <p className="font-medium flex items-center space-x-1">
+                                <User className="h-3 w-3" />
+                                <span>{userType === "owner" ? contractData.tenantName : contractData.landlordName}</span>
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {userType === "owner" ? contractData.tenantPhone : contractData.ownerPhone}
+                              </p>
+                            </div>
 
-                      <div>
-                        <p className="text-sm text-muted-foreground">Période</p>
-                        <p className="font-medium flex items-center space-x-1">
-                          <Calendar className="h-3 w-3" />
-                          <span>{new Date(contract.startDate).toLocaleDateString('fr-FR')} - {new Date(contract.endDate).toLocaleDateString('fr-FR')}</span>
-                        </p>
-                        {contract.signedDate && (
-                          <p className="text-xs text-muted-foreground">
-                            Signé le {new Date(contract.signedDate).toLocaleDateString('fr-FR')}
-                          </p>
-                        )}
-                      </div>
+                            <div>
+                              <p className="text-sm text-muted-foreground">Période</p>
+                              <p className="font-medium flex items-center space-x-1">
+                                <Calendar className="h-3 w-3" />
+                                <span>
+                                  {contractData.startDate && contractData.endDate ? 
+                                    `${new Date(contractData.startDate).toLocaleDateString('fr-FR')} - ${new Date(contractData.endDate).toLocaleDateString('fr-FR')}` :
+                                    'Dates non définies'
+                                  }
+                                </span>
+                              </p>
+                              {contract.ownerSignedAt && (
+                                <p className="text-xs text-muted-foreground">
+                                  Signé le {new Date(contract.ownerSignedAt).toLocaleDateString('fr-FR')}
+                                </p>
+                              )}
+                            </div>
 
-                      <div>
-                        <p className="text-sm text-muted-foreground">Montants</p>
-                        <p className="font-medium flex items-center space-x-1">
-                          <DollarSign className="h-3 w-3" />
-                          <span>{contract.monthlyRent} TND/mois</span>
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Caution: {contract.deposit} TND
-                        </p>
-                      </div>
-                    </div>
+                            <div>
+                              <p className="text-sm text-muted-foreground">Montants</p>
+                              <p className="font-medium flex items-center space-x-1">
+                                <DollarSign className="h-3 w-3" />
+                                <span>{contractData.monthlyRent || '0'} TND/mois</span>
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Caution: {contractData.deposit || '0'} TND
+                              </p>
+                            </div>
+                          </div>
 
-                    {/* Next Payment */}
-                    {contract.status === "Actif" && (
-                      <div className="p-3 glass-card rounded-lg mb-4">
-                        <p className="text-sm font-medium">Prochain paiement</p>
-                        <p className="text-xs text-muted-foreground">
-                          Dû le {new Date(contract.nextPaymentDue).toLocaleDateString('fr-FR')}
-                        </p>
-                      </div>
-                    )}
+                          {/* Contract Actions for Active Contracts */}
+                          {contract.status === 'active' && userType === 'owner' && (
+                            <div className="mt-4">
+                              <EnhancedContractActions 
+                                contract={contract}
+                                currentUserId={currentUserId}
+                                userType={userType}
+                              />
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
 
                   {/* Actions */}
                   <div className="flex flex-col space-y-2 ml-6">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => downloadContract(contract.contractUrl)}
-                    >
-                      <Download className="h-3 w-3 mr-1" />
-                      PDF
-                    </Button>
-
                     <Button 
                       variant="outline" 
                       size="sm"
@@ -397,69 +375,127 @@ const Contracts = () => {
                       Voir
                     </Button>
 
-                    {contract.status === "En attente de signature" && (
-                      <>
-                        {userType === "owner" ? (
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => sendContractForSignature(contract.id)}
-                          >
-                            <Send className="h-3 w-3 mr-1" />
-                            Envoyer
-                          </Button>
-                        ) : (
-                          <Button 
-                            variant="default" 
-                            size="sm"
-                            onClick={() => signContract(contract.id)}
-                          >
-                            <Edit className="h-3 w-3 mr-1" />
-                            Signer
-                          </Button>
-                        )}
-                      </>
-                    )}
-
-                    {contract.status === "Actif" && userType === "owner" && (
+                    {(contract.status === 'fully_signed' || contract.status === 'active') && (
                       <Button 
                         variant="outline" 
                         size="sm"
-                        onClick={() => navigate(`/messages?contact=${contract.tenant}`)}
+                        onClick={() => downloadContract(`/api/contracts/${contract.id}/download`)}
                       >
-                        <User className="h-3 w-3 mr-1" />
-                        Contact
+                        <Download className="h-3 w-3 mr-1" />
+                        PDF
                       </Button>
                     )}
                   </div>
                 </div>
               </CardContent>
             </Card>
-          ))}
-        </div>
-
-        {filteredContracts.length === 0 && (
-          <div className="text-center py-16">
-            <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">
-              {searchQuery || statusFilter ? "Aucun contrat trouvé" : "Aucun contrat pour le moment"}
-            </h3>
-            <p className="text-muted-foreground mb-6">
-              {searchQuery || statusFilter 
-                ? "Essayez de modifier vos critères de recherche"
-                : userType === "owner" 
-                  ? "Créez votre premier contrat pour vos locataires"
-                  : "Vos contrats de location apparaîtront ici"
-              }
-            </p>
-            {!searchQuery && !statusFilter && userType === "owner" && (
-              <Button onClick={generateNewContract} className="flex items-center space-x-2">
-                <Plus className="h-4 w-4" />
-                <span>Créer un contrat</span>
-              </Button>
+              ))
             )}
-          </div>
-        )}
+          </TabsContent>
+
+          <TabsContent value="modification-requests" className="space-y-4 mt-6">
+            {modRequestsLoading ? (
+              <div className="text-center py-8">Chargement des demandes...</div>
+            ) : userModificationRequests.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                {userType === 'owner' ? 'Aucune demande de modification reçue' : 'Aucune demande de modification envoyée'}
+              </div>
+            ) : (
+              userModificationRequests.map((request: any) => (
+                <Card key={request.id} className="glass-card">
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <Edit className="h-5 w-5 text-primary" />
+                          <h3 className="font-semibold">Demande de modification de contrat</h3>
+                          <Badge variant={request.status === 'pending' ? 'warning' : request.status === 'accepted' ? 'success' : 'destructive'}>
+                            {request.status === 'pending' ? 'En attente' : request.status === 'accepted' ? 'Acceptée' : 'Refusée'}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Contrat ID: {request.contractId}
+                        </p>
+                        <p className="text-sm mb-2">
+                          <strong>Raison:</strong> {request.reason || 'Non spécifiée'}
+                        </p>
+                        {request.fieldsToModify && (
+                          <p className="text-sm mb-2">
+                            <strong>Champs à modifier:</strong> {request.fieldsToModify}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          Demandé le {new Date(request.createdAt).toLocaleDateString('fr-FR')}
+                        </p>
+                      </div>
+                      <div className="flex flex-col space-y-2">
+                        {request.status === 'pending' && userType === 'tenant' && request.requestedBy !== currentUserId && (
+                          <>
+                            <Button size="sm" variant="default">
+                              Accepter
+                            </Button>
+                            <Button size="sm" variant="outline">
+                              Refuser
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </TabsContent>
+
+          <TabsContent value="termination-requests" className="space-y-4 mt-6">
+            {termRequestsLoading ? (
+              <div className="text-center py-8">Chargement des demandes...</div>
+            ) : userTerminationRequests.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                {userType === 'owner' ? 'Aucune demande de résiliation reçue' : 'Aucune demande de résiliation envoyée'}
+              </div>
+            ) : (
+              userTerminationRequests.map((request: any) => (
+                <Card key={request.id} className="glass-card">
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <AlertCircle className="h-5 w-5 text-destructive" />
+                          <h3 className="font-semibold">Demande de résiliation de contrat</h3>
+                          <Badge variant={request.status === 'pending' ? 'warning' : request.status === 'accepted' ? 'success' : 'destructive'}>
+                            {request.status === 'pending' ? 'En attente' : request.status === 'accepted' ? 'Acceptée' : 'Refusée'}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Contrat ID: {request.contractId}
+                        </p>
+                        <p className="text-sm mb-2">
+                          <strong>Raison:</strong> {request.reason || 'Non spécifiée'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Demandé le {new Date(request.createdAt).toLocaleDateString('fr-FR')}
+                        </p>
+                      </div>
+                      <div className="flex flex-col space-y-2">
+                        {request.status === 'pending' && userType === 'tenant' && request.requestedBy !== currentUserId && (
+                          <>
+                            <Button size="sm" variant="destructive">
+                              Accepter
+                            </Button>
+                            <Button size="sm" variant="outline">
+                              Refuser
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

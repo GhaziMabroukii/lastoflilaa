@@ -3,6 +3,10 @@ import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { AlertCircle, AlertTriangle, Edit, Trash2, Clock, CheckCircle, XCircle, ChevronDown, RefreshCw } from 'lucide-react';
 import {
   AlertDialog,
@@ -39,6 +43,9 @@ export function EnhancedContractActions({ contract, currentUserId, userType }: C
   const [showTerminationDialog, setShowTerminationDialog] = useState(false);
   const [showModificationDialog, setShowModificationDialog] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [terminationReason, setTerminationReason] = useState('');
+  const [modificationReason, setModificationReason] = useState('');
+  const [selectedFields, setSelectedFields] = useState<string[]>([]);
 
   // Fetch pending requests for this contract
   const { data: pendingRequests = [] } = useQuery<RequestStatus[]>({
@@ -53,11 +60,14 @@ export function EnhancedContractActions({ contract, currentUserId, userType }: C
   // Early termination request mutation
   const terminationRequestMutation = useMutation({
     mutationFn: async () => {
+      if (!terminationReason.trim()) {
+        throw new Error('La raison de la résiliation est obligatoire');
+      }
       return apiRequest(`/api/contracts/${contract.id}/request-termination`, {
         method: 'POST',
         body: JSON.stringify({
           requestedBy: currentUserId,
-          reason: "Demande d'arrêt anticipé par le propriétaire"
+          reason: terminationReason
         })
       });
     },
@@ -69,6 +79,7 @@ export function EnhancedContractActions({ contract, currentUserId, userType }: C
       queryClient.invalidateQueries({ queryKey: [`/api/contracts/${contract.id}/pending-requests`] });
       queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
       setShowTerminationDialog(false);
+      setTerminationReason('');
       setError(null);
     },
     onError: (error: any) => {
@@ -80,11 +91,19 @@ export function EnhancedContractActions({ contract, currentUserId, userType }: C
   // Modification request mutation
   const modificationRequestMutation = useMutation({
     mutationFn: async () => {
+      if (!modificationReason.trim()) {
+        throw new Error('La raison de la modification est obligatoire');
+      }
+      if (selectedFields.length === 0) {
+        throw new Error('Vous devez sélectionner au moins un champ à modifier');
+      }
       return apiRequest(`/api/contracts/${contract.id}/request-modification`, {
         method: 'POST',
         body: JSON.stringify({
           requestedBy: currentUserId,
-          requestedChanges: "Demande de modification des termes du contrat"
+          reason: modificationReason,
+          fieldsToModify: selectedFields,
+          requestedChanges: `Modification demandée pour: ${selectedFields.join(', ')}. Raison: ${modificationReason}`
         })
       });
     },
@@ -96,6 +115,8 @@ export function EnhancedContractActions({ contract, currentUserId, userType }: C
       queryClient.invalidateQueries({ queryKey: [`/api/contracts/${contract.id}/pending-requests`] });
       queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
       setShowModificationDialog(false);
+      setModificationReason('');
+      setSelectedFields([]);
       setError(null);
     },
     onError: (error: any) => {
@@ -255,32 +276,51 @@ export function EnhancedContractActions({ contract, currentUserId, userType }: C
 
       {/* Termination Request Dialog */}
       <AlertDialog open={showTerminationDialog} onOpenChange={setShowTerminationDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-orange-600" />
               Demande d'Arrêt Anticipé
             </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
+            <AlertDialogDescription className="space-y-4">
               <p>
-                Vous allez demander l'arrêt anticipé de ce contrat. 
-                Le locataire recevra une notification et pourra accepter ou refuser votre demande.
+                Demander l'arrêt anticipé de ce contrat. Le locataire recevra une notification 
+                et pourra accepter ou refuser votre demande.
               </p>
+              
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="termination-reason" className="text-sm font-medium">
+                    Raison de la résiliation *
+                  </Label>
+                  <Textarea
+                    id="termination-reason"
+                    placeholder="Expliquez la raison de votre demande d'arrêt anticipé..."
+                    value={terminationReason}
+                    onChange={(e) => setTerminationReason(e.target.value)}
+                    className="mt-1"
+                    rows={3}
+                  />
+                </div>
+              </div>
+              
               <div className="bg-yellow-50 p-3 rounded-md border border-yellow-200">
-                <p className="text-sm text-yellow-800">
-                  <strong>Important :</strong> Si le locataire accepte, le contrat sera immédiatement terminé 
-                  et la propriété redeviendra disponible.
+                <p className="text-xs text-yellow-800">
+                  <strong>Important :</strong> Si acceptée, la résiliation sera immédiate.
                 </p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setTerminationReason('')}>
+              Annuler
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => terminationRequestMutation.mutate()}
               className="bg-orange-600 hover:bg-orange-700"
+              disabled={!terminationReason.trim() || terminationRequestMutation.isPending}
             >
-              Envoyer la demande
+              {terminationRequestMutation.isPending ? 'Envoi...' : 'Envoyer la demande'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -288,32 +328,92 @@ export function EnhancedContractActions({ contract, currentUserId, userType }: C
 
       {/* Modification Request Dialog */}
       <AlertDialog open={showModificationDialog} onOpenChange={setShowModificationDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-lg">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <Edit className="w-5 h-5 text-blue-600" />
               Demande de Modification
             </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              <p>
-                Vous allez demander une modification de ce contrat. 
-                Le locataire recevra une notification et pourra accepter ou refuser votre demande.
+            <AlertDialogDescription className="space-y-4">
+              <p className="text-sm">
+                Demander une modification de ce contrat. Le locataire recevra une notification 
+                et pourra accepter ou refuser votre demande.
               </p>
+              
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="modification-reason" className="text-sm font-medium">
+                    Raison de la modification *
+                  </Label>
+                  <Textarea
+                    id="modification-reason"
+                    placeholder="Expliquez pourquoi vous souhaitez modifier le contrat..."
+                    value={modificationReason}
+                    onChange={(e) => setModificationReason(e.target.value)}
+                    className="mt-1"
+                    rows={3}
+                  />
+                </div>
+                
+                <div>
+                  <Label className="text-sm font-medium mb-3 block">
+                    Champs à modifier * (sélectionnez au moins un)
+                  </Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { id: 'tenant_name', label: 'Nom du locataire' },
+                      { id: 'tenant_cin', label: 'CIN du locataire' },
+                      { id: 'tenant_address', label: 'Adresse du locataire' },
+                      { id: 'monthly_rent', label: 'Loyer mensuel' },
+                      { id: 'deposit', label: 'Caution' },
+                      { id: 'contract_duration', label: 'Durée du contrat' },
+                      { id: 'special_conditions', label: 'Conditions spéciales' },
+                      { id: 'payment_terms', label: 'Modalités de paiement' }
+                    ].map((field) => (
+                      <div key={field.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={field.id}
+                          checked={selectedFields.includes(field.id)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedFields([...selectedFields, field.id]);
+                            } else {
+                              setSelectedFields(selectedFields.filter(f => f !== field.id));
+                            }
+                          }}
+                        />
+                        <Label 
+                          htmlFor={field.id} 
+                          className="text-xs cursor-pointer"
+                        >
+                          {field.label}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              
               <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
-                <p className="text-sm text-blue-800">
-                  <strong>Note :</strong> Si le locataire accepte, vous pourrez ensuite modifier 
-                  les termes du contrat qui devront être re-signés par les deux parties.
+                <p className="text-xs text-blue-800">
+                  <strong>Note :</strong> Si acceptée, les modifications devront être re-signées.
                 </p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => {
+              setModificationReason('');
+              setSelectedFields([]);
+            }}>
+              Annuler
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => modificationRequestMutation.mutate()}
               className="bg-blue-600 hover:bg-blue-700"
+              disabled={!modificationReason.trim() || selectedFields.length === 0 || modificationRequestMutation.isPending}
             >
-              Envoyer la demande
+              {modificationRequestMutation.isPending ? 'Envoi...' : 'Envoyer la demande'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
