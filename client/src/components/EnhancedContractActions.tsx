@@ -304,8 +304,8 @@ export function EnhancedContractActions({ contract, currentUserId, userType }: C
                 </DropdownMenu>
               </div>
               
-              {/* Modify Contract Button - appears when modification is pending */}
-              {modificationRequest.status === 'pending' && (
+              {/* Modify Contract Button - appears when modification is accepted */}
+              {modificationRequest.status === 'accepted' && (
                 <Button
                   onClick={() => setShowModifyContractDialog(true)}
                   disabled={contractModificationMutation.isPending}

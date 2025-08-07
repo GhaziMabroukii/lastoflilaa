@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiRequest } from "@/lib/queryClient";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +37,7 @@ const Contracts = () => {
   const [activeTab, setActiveTab] = useState("contracts");
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   
   // Get user authentication
   const currentUserId = Number(localStorage.getItem("userId"));
@@ -85,13 +87,25 @@ const Contracts = () => {
   });
   
   // Filter requests based on user type
-  const userModificationRequests = (modificationRequests as any[]).filter((req: any) => 
-    userType === 'owner' ? req.requestedBy !== currentUserId : req.requestedBy === currentUserId
-  );
+  const userModificationRequests = (modificationRequests as any[]).filter((req: any) => {
+    if (userType === 'owner') {
+      // Owner sees requests that they sent (requestedBy === currentUserId)
+      return req.requestedBy === currentUserId;
+    } else {
+      // Tenant sees requests they received (requestedBy !== currentUserId, so requests from owners)
+      return req.requestedBy !== currentUserId;
+    }
+  });
   
-  const userTerminationRequests = (terminationRequests as any[]).filter((req: any) => 
-    userType === 'owner' ? req.requestedBy !== currentUserId : req.requestedBy === currentUserId
-  );
+  const userTerminationRequests = (terminationRequests as any[]).filter((req: any) => {
+    if (userType === 'owner') {
+      // Owner sees requests that they sent (requestedBy === currentUserId)
+      return req.requestedBy === currentUserId;
+    } else {
+      // Tenant sees requests they received (requestedBy !== currentUserId, so requests from owners)
+      return req.requestedBy !== currentUserId;
+    }
+  });
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -112,6 +126,70 @@ const Contracts = () => {
       default: return "outline";
     }
   };
+
+  // Respond to modification request mutation
+  const respondToModificationMutation = useMutation({
+    mutationFn: async ({ requestId, response, tenantResponse }: { requestId: number, response: 'accepted' | 'rejected', tenantResponse?: string }) => {
+      return apiRequest(`/api/contract-modification-requests/${requestId}/respond`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          response,
+          tenantResponse,
+          userId: currentUserId
+        })
+      });
+    },
+    onSuccess: (_, variables) => {
+      toast({
+        title: variables.response === 'accepted' ? "Demande acceptée" : "Demande refusée",
+        description: variables.response === 'accepted' ? 
+          "La demande de modification a été acceptée. Le propriétaire peut maintenant modifier le contrat." :
+          "La demande de modification a été refusée."
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/contract-modification-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erreur",
+        description: error.message || "Erreur lors de la réponse à la demande",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Respond to termination request mutation  
+  const respondToTerminationMutation = useMutation({
+    mutationFn: async ({ requestId, response, tenantResponse }: { requestId: number, response: 'accepted' | 'rejected', tenantResponse?: string }) => {
+      return apiRequest(`/api/contract-termination-requests/${requestId}/respond`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          response,
+          tenantResponse,
+          userId: currentUserId
+        })
+      });
+    },
+    onSuccess: (_, variables) => {
+      toast({
+        title: variables.response === 'accepted' ? "Arrêt accepté" : "Arrêt refusé",
+        description: variables.response === 'accepted' ? 
+          "L'arrêt anticipé a été accepté. Le contrat est maintenant terminé." :
+          "L'arrêt anticipé a été refusé. Le contrat reste actif."
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/contract-termination-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erreur",
+        description: error.message || "Erreur lors de la réponse à la demande",
+        variant: "destructive"
+      });
+    }
+  });
 
   const generateNewContract = () => {
     navigate("/create-contract");
@@ -266,10 +344,10 @@ const Contracts = () => {
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="contracts">Mes Contrats</TabsTrigger>
             <TabsTrigger value="modification-requests">
-              {userType === 'owner' ? 'Demandes de modification reçues' : 'Mes demandes de modification'}
+              {userType === 'owner' ? 'Demandes de modification envoyées' : 'Demandes de modification reçues'}
             </TabsTrigger>
             <TabsTrigger value="termination-requests">
-              {userType === 'owner' ? 'Demandes de résiliation reçues' : 'Mes demandes de résiliation'}
+              {userType === 'owner' ? 'Demandes d\'arrêt envoyées' : 'Demandes d\'arrêt reçues'}
             </TabsTrigger>
           </TabsList>
           
@@ -398,7 +476,7 @@ const Contracts = () => {
               <div className="text-center py-8">Chargement des demandes...</div>
             ) : userModificationRequests.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                {userType === 'owner' ? 'Aucune demande de modification reçue' : 'Aucune demande de modification envoyée'}
+                {userType === 'owner' ? 'Aucune demande de modification envoyée' : 'Aucune demande de modification reçue'}
               </div>
             ) : (
               userModificationRequests.map((request: any) => (
@@ -421,20 +499,41 @@ const Contracts = () => {
                         </p>
                         {request.fieldsToModify && (
                           <p className="text-sm mb-2">
-                            <strong>Champs à modifier:</strong> {request.fieldsToModify}
+                            <strong>Champs à modifier:</strong> {Array.isArray(request.fieldsToModify) ? request.fieldsToModify.join(', ') : request.fieldsToModify}
                           </p>
                         )}
                         <p className="text-xs text-muted-foreground">
-                          Demandé le {new Date(request.createdAt).toLocaleDateString('fr-FR')}
+                          Demandé le {new Date(request.createdAt).toLocaleDateString('fr-FR')} à {new Date(request.createdAt).toLocaleTimeString('fr-FR')}
                         </p>
+                        {request.respondedAt && (
+                          <p className="text-xs text-muted-foreground">
+                            Répondu le {new Date(request.respondedAt).toLocaleDateString('fr-FR')} à {new Date(request.respondedAt).toLocaleTimeString('fr-FR')}
+                          </p>
+                        )}
                       </div>
                       <div className="flex flex-col space-y-2">
                         {request.status === 'pending' && userType === 'tenant' && request.requestedBy !== currentUserId && (
                           <>
-                            <Button size="sm" variant="default">
+                            <Button 
+                              size="sm" 
+                              variant="default"
+                              onClick={() => respondToModificationMutation.mutate({ 
+                                requestId: request.id, 
+                                response: 'accepted' 
+                              })}
+                              disabled={respondToModificationMutation.isPending}
+                            >
                               Accepter
                             </Button>
-                            <Button size="sm" variant="outline">
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => respondToModificationMutation.mutate({ 
+                                requestId: request.id, 
+                                response: 'rejected' 
+                              })}
+                              disabled={respondToModificationMutation.isPending}
+                            >
                               Refuser
                             </Button>
                           </>
@@ -452,7 +551,7 @@ const Contracts = () => {
               <div className="text-center py-8">Chargement des demandes...</div>
             ) : userTerminationRequests.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                {userType === 'owner' ? 'Aucune demande de résiliation reçue' : 'Aucune demande de résiliation envoyée'}
+                {userType === 'owner' ? 'Aucune demande d\'arrêt envoyée' : 'Aucune demande d\'arrêt reçue'}
               </div>
             ) : (
               userTerminationRequests.map((request: any) => (
@@ -473,17 +572,43 @@ const Contracts = () => {
                         <p className="text-sm mb-2">
                           <strong>Raison:</strong> {request.reason || 'Non spécifiée'}
                         </p>
+                        {request.detailedReason && (
+                          <p className="text-sm mb-2">
+                            <strong>Détails:</strong> {request.detailedReason}
+                          </p>
+                        )}
                         <p className="text-xs text-muted-foreground">
-                          Demandé le {new Date(request.createdAt).toLocaleDateString('fr-FR')}
+                          Demandé le {new Date(request.createdAt).toLocaleDateString('fr-FR')} à {new Date(request.createdAt).toLocaleTimeString('fr-FR')}
                         </p>
+                        {request.respondedAt && (
+                          <p className="text-xs text-muted-foreground">
+                            Répondu le {new Date(request.respondedAt).toLocaleDateString('fr-FR')} à {new Date(request.respondedAt).toLocaleTimeString('fr-FR')}
+                          </p>
+                        )}
                       </div>
                       <div className="flex flex-col space-y-2">
                         {request.status === 'pending' && userType === 'tenant' && request.requestedBy !== currentUserId && (
                           <>
-                            <Button size="sm" variant="destructive">
+                            <Button 
+                              size="sm" 
+                              variant="destructive"
+                              onClick={() => respondToTerminationMutation.mutate({ 
+                                requestId: request.id, 
+                                response: 'accepted' 
+                              })}
+                              disabled={respondToTerminationMutation.isPending}
+                            >
                               Accepter
                             </Button>
-                            <Button size="sm" variant="outline">
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => respondToTerminationMutation.mutate({ 
+                                requestId: request.id, 
+                                response: 'rejected' 
+                              })}
+                              disabled={respondToTerminationMutation.isPending}
+                            >
                               Refuser
                             </Button>
                           </>
