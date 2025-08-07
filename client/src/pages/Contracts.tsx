@@ -427,8 +427,8 @@ const Contracts = () => {
                             </div>
                           </div>
 
-                          {/* Contract Actions for Active Contracts */}
-                          {contract.status === 'active' && userType === 'owner' && (
+                          {/* Contract Actions for Active Contracts and Waiting for Modification */}
+                          {(contract.status === 'active' || contract.status === 'waiting_for_modification') && userType === 'owner' && (
                             <div className="mt-4">
                               <EnhancedContractActions 
                                 contract={contract}
