@@ -115,7 +115,14 @@ Preferred communication style: Simple, everyday language.
 - **User Type Validation**: Smart user type detection during registration based on email patterns with proper tenant/owner separation
 - **Security Hardening**: Proper request validation, error handling, and user session management with token-based authentication
 - **Migration Completed**: Final migration from Replit Agent to standard Replit environment completed successfully with tsx dependency installed, PostgreSQL database provisioned, schema migrations applied, and application fully functional
-- **Migration Completed**: Final migration from Replit Agent to standard Replit environment completed successfully with tsx dependency installed, PostgreSQL database provisioned, schema migrations applied, and application fully functional
+
+### Contract Management Request UI Fix (August 2025) ✅ COMPLETE
+- **Tenant Request Visibility Issue**: Fixed critical bug where tenant could not see contract modification and termination requests in "Mes demandes" dropdown
+- **Backend API Enhancement**: Updated `/api/tenant-requests/:userId` endpoint to properly query all user contracts using `inArray()` instead of only checking first contract
+- **Frontend Query Fix**: Implemented explicit queryFn in TenantRequestsDropdown component to ensure proper API communication and data fetching
+- **Real-time Updates**: Tenant now properly receives and can interact with owner-initiated contract management requests (modification and early termination)
+- **Complete Workflow**: Tenants can now accept/decline management requests through proper navigation to dedicated response pages
+- **Testing Verified**: Full workflow tested with modification request - tenant receives notification, sees request in dropdown, can navigate to response page
 
 ### Advanced Contract Management System (August 2025) ✅ COMPLETE
 - **Contract Creation Restrictions**: System prevents creation of new contracts when an active contract already exists for the property

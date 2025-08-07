@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertPropertySchema, insertOfferSchema, insertContractSchema, insertNotificationSchema, insertConversationSchema, insertMessageSchema, insertReviewSchema, insertContractModificationRequestSchema, insertContractTerminationRequestSchema, contracts, users, conversations, messages, reviews, properties, offers, contractModificationRequests, contractTerminationRequests } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 // Alias tables for clarity in joins
@@ -1062,7 +1062,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const contractIds = userContracts.map(c => c.id);
 
-      // Get modification requests
+      // Get modification requests for all user contracts
       const modificationRequests = await db
         .select({
           id: contractModificationRequests.id,
@@ -1072,9 +1072,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           contractId: contractModificationRequests.contractId,
         })
         .from(contractModificationRequests)
-        .where(eq(contractModificationRequests.contractId, contractIds[0])); // For now, just check first contract
+        .where(inArray(contractModificationRequests.contractId, contractIds));
 
-      // Get termination requests
+      // Get termination requests for all user contracts
       const terminationRequests = await db
         .select({
           id: contractTerminationRequests.id,
@@ -1084,7 +1084,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           contractId: contractTerminationRequests.contractId,
         })
         .from(contractTerminationRequests)
-        .where(eq(contractTerminationRequests.contractId, contractIds[0])); // For now, just check first contract
+        .where(inArray(contractTerminationRequests.contractId, contractIds));
+
+      console.log(`Found ${modificationRequests.length} modification requests and ${terminationRequests.length} termination requests for user ${userId}`);
+      console.log("Modification requests:", modificationRequests);
+      console.log("Termination requests:", terminationRequests);
 
       const allRequests = [...modificationRequests, ...terminationRequests];
       res.json(allRequests);

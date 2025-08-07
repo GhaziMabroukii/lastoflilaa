@@ -38,8 +38,28 @@ export function TenantRequestsDropdown({ userId, userType }: TenantRequestsDropd
   // Fetch pending requests for this tenant
   const { data: allRequests = [], isLoading: requestsLoading, error } = useQuery<Request[]>({
     queryKey: [`/api/tenant-requests/${userId}`],
+    queryFn: async () => {
+      console.log("TenantRequestsDropdown: Making API request to", `/api/tenant-requests/${userId}`);
+      const response = await fetch(`/api/tenant-requests/${userId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        console.error("TenantRequestsDropdown: API error", response.status, response.statusText);
+        throw new Error(`Failed to fetch tenant requests: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log("TenantRequestsDropdown: Received data", data);
+      return data;
+    },
     enabled: userType === 'tenant' && !!userId,
-    refetchInterval: 5000 // Refetch every 5 seconds for real-time updates
+    refetchInterval: 5000, // Refetch every 5 seconds for real-time updates
+    retry: 3,
+    staleTime: 0 // Always fetch fresh data
   });
   
   console.log("TenantRequestsDropdown query result:", { 
