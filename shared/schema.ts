@@ -74,7 +74,7 @@ export const contracts = pgTable("contracts", {
   tenantSignature: text("tenant_signature"), // Base64 signature data
   ownerSignedAt: timestamp("owner_signed_at"),
   tenantSignedAt: timestamp("tenant_signed_at"),
-  status: text("status").notNull().default("draft"), // draft, owner_signed, fully_signed, active, expired, cancelled, terminated, modified
+  status: text("status").notNull().default("draft"), // draft, owner_signed, fully_signed, active, expired, cancelled, terminated, waiting_for_modification, modified
   tenantSignDeadline: timestamp("tenant_sign_deadline"), // 3 days from owner signature
   pdfUrl: text("pdf_url"),
   // Enhanced contract management fields
@@ -131,6 +131,21 @@ export const reviews = pgTable("reviews", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Contract versions table for tracking contract modifications
+export const contractVersions = pgTable("contract_versions", {
+  id: serial("id").primaryKey(),
+  contractId: integer("contract_id").notNull().references(() => contracts.id),
+  version: integer("version").notNull().default(1), // Version number (1, 2, 3, etc.)
+  contractData: jsonb("contract_data").notNull(), // Contract data for this version
+  ownerSignature: text("owner_signature"),
+  tenantSignature: text("tenant_signature"),
+  ownerSignedAt: timestamp("owner_signed_at"),
+  tenantSignedAt: timestamp("tenant_signed_at"),
+  status: text("status").notNull().default("draft"), // draft, owner_signed, fully_signed, active, superseded
+  modificationReason: text("modification_reason"), // Why this version was created
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Contract modification requests table
 export const contractModificationRequests = pgTable("contract_modification_requests", {
   id: serial("id").primaryKey(),
@@ -140,6 +155,7 @@ export const contractModificationRequests = pgTable("contract_modification_reque
   status: text("status").notNull().default("pending"), // pending, accepted, rejected
   tenantResponse: text("tenant_response"), // Optional message from tenant
   respondedAt: timestamp("responded_at"),
+  modificationDeadline: timestamp("modification_deadline"), // 24h from acceptance
   createdAt: timestamp("created_at").defaultNow(),
 });
 

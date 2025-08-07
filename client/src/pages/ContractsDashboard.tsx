@@ -1,13 +1,15 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLocation } from "wouter";
 import { ContractStatusBadge } from "@/components/ContractStatusBadge";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { FileText, Plus, Eye, Edit } from "lucide-react";
+import { FileText, Plus, Eye, Edit, Clock, AlertTriangle, History } from "lucide-react";
 
 interface Contract {
   id: number;
@@ -25,6 +27,7 @@ interface Contract {
 
 export default function ContractsDashboard() {
   const [, navigate] = useLocation();
+  const [activeTab, setActiveTab] = useState<'active' | 'terminated' | 'modified'>('active');
   
   // Get current user from localStorage (real session management)
   const getCurrentUser = () => {
@@ -78,12 +81,28 @@ export default function ContractsDashboard() {
     enabled: !!currentUserId && !!userType, // Only fetch if user is logged in and userType is set
   });
 
+  // Categorize contracts by status
+  const activeContracts = contracts.filter(contract => 
+    ['active', 'fully_signed', 'owner_signed', 'draft', 'waiting_for_modification'].includes(contract.status)
+  );
+  
+  const terminatedContracts = contracts.filter(contract => 
+    contract.status === 'terminated'
+  );
+  
+  const modifiedContracts = contracts.filter(contract => 
+    contract.status === 'modified' || contract.modificationSummary?.includes('Version')
+  );
+
   // Debug logging
   console.log('ContractsDashboard Debug:', {
     currentUser,
     currentUserId,
     userType,
     contractsCount: contracts.length,
+    activeContracts: activeContracts.length,
+    terminatedContracts: terminatedContracts.length,
+    modifiedContracts: modifiedContracts.length,
     contracts,
     isLoading,
     error
@@ -173,28 +192,45 @@ export default function ContractsDashboard() {
         </div>
       </div>
 
-      {contracts.length === 0 ? (
-        <Card className="text-center py-12">
-          <CardContent>
-            <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Aucun contrat trouvé</h3>
-            <p className="text-muted-foreground mb-6">
-              {userType === 'owner' 
-                ? 'Vous n\'avez pas encore de contrats. Créez votre premier contrat pour commencer.'
-                : 'Vous n\'avez pas encore reçu de contrats. Les propriétaires vous enverront des contrats à signer.'
-              }
-            </p>
-            {userType === 'owner' && (
-              <Button onClick={() => navigate("/create-contract")}>
-                <Plus className="h-4 w-4 mr-2" />
-                Créer un contrat
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4">
-          {contracts.map((contract) => (
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'active' | 'terminated' | 'modified')} className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="active" className="flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            Contrats Actifs ({activeContracts.length})
+          </TabsTrigger>
+          <TabsTrigger value="terminated" className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4" />
+            Contrats Terminés ({terminatedContracts.length})
+          </TabsTrigger>
+          <TabsTrigger value="modified" className="flex items-center gap-2">
+            <History className="h-4 w-4" />
+            Contrats Modifiés ({modifiedContracts.length})
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="active" className="mt-6">
+          {activeContracts.length === 0 ? (
+            <Card className="text-center py-12">
+              <CardContent>
+                <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Aucun contrat actif</h3>
+                <p className="text-muted-foreground mb-6">
+                  {userType === 'owner' 
+                    ? 'Vous n\'avez pas encore de contrats actifs. Créez votre premier contrat pour commencer.'
+                    : 'Vous n\'avez pas encore de contrats actifs. Les propriétaires vous enverront des contrats à signer.'
+                  }
+                </p>
+                {userType === 'owner' && (
+                  <Button onClick={() => navigate("/create-contract")}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Créer un contrat
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4">
+              {activeContracts.map((contract) => (
             <Card key={contract.id} className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <div className="flex justify-between items-start">
@@ -257,44 +293,147 @@ export default function ContractsDashboard() {
               )}
             </Card>
           ))}
-        </div>
-      )}
+            </div>
+          )}
+        </TabsContent>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-8">
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-green-600">
-              {contracts.filter(c => c.status === 'active').length}
+        <TabsContent value="terminated" className="mt-6">
+          {terminatedContracts.length === 0 ? (
+            <Card className="text-center py-12">
+              <CardContent>
+                <AlertTriangle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Aucun contrat terminé</h3>
+                <p className="text-muted-foreground">
+                  Aucun contrat n'a été terminé anticipativement.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4">
+              {terminatedContracts.map((contract) => (
+                <Card key={contract.id} className="hover:shadow-md transition-shadow border-red-200">
+                  <CardHeader>
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <CardTitle className="text-lg">
+                            {getContractTitle(contract)}
+                          </CardTitle>
+                          <Badge variant="destructive">Terminé</Badge>
+                          <Badge variant="outline" className="text-xs">
+                            {getContractRole(contract)}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          <span>Contrat #{contract.id}</span>
+                          <span>Terminé le {contract.terminatedAt ? format(new Date(contract.terminatedAt), 'dd MMM yyyy', { locale: fr }) : 'N/A'}</span>
+                          {contract.terminationReason && (
+                            <span className="text-red-600 font-medium">
+                              Raison: {contract.terminationReason}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => navigate(`/contract/${contract.id}`)}
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          Voir Détails
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  {contract.contractData?.propertyAddress && (
+                    <CardContent className="pt-0">
+                      <p className="text-sm text-muted-foreground">
+                        📍 {contract.contractData.propertyAddress}
+                      </p>
+                    </CardContent>
+                  )}
+                </Card>
+              ))}
             </div>
-            <div className="text-sm text-muted-foreground">Actifs</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-yellow-600">
-              {contracts.filter(c => c.status === 'owner_signed').length}
+          )}
+        </TabsContent>
+
+        <TabsContent value="modified" className="mt-6">
+          {modifiedContracts.length === 0 ? (
+            <Card className="text-center py-12">
+              <CardContent>
+                <History className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Aucun contrat modifié</h3>
+                <p className="text-muted-foreground">
+                  Aucun contrat n'a été modifié depuis sa création.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4">
+              {modifiedContracts.map((contract) => (
+                <Card key={contract.id} className="hover:shadow-md transition-shadow border-blue-200">
+                  <CardHeader>
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <CardTitle className="text-lg">
+                            {getContractTitle(contract)}
+                          </CardTitle>
+                          <Badge variant="secondary">Modifié</Badge>
+                          <Badge variant="outline" className="text-xs">
+                            {getContractRole(contract)}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          <span>Contrat #{contract.id}</span>
+                          <span>Modifié le {format(new Date(contract.updatedAt), 'dd MMM yyyy', { locale: fr })}</span>
+                          {contract.modificationSummary && (
+                            <span className="text-blue-600 font-medium">
+                              {contract.modificationSummary}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => navigate(`/contract/${contract.id}`)}
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          Version Actuelle
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => navigate(`/contract/${contract.id}/versions`)}
+                        >
+                          <History className="h-4 w-4 mr-2" />
+                          Historique
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  {contract.contractData?.propertyAddress && (
+                    <CardContent className="pt-0">
+                      <p className="text-sm text-muted-foreground">
+                        📍 {contract.contractData.propertyAddress}
+                      </p>
+                      {contract.contractData?.monthlyRent && (
+                        <p className="text-sm font-medium mt-1">
+                          💰 {contract.contractData.monthlyRent}€/mois
+                        </p>
+                      )}
+                    </CardContent>
+                  )}
+                </Card>
+              ))}
             </div>
-            <div className="text-sm text-muted-foreground">En attente</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-blue-600">
-              {contracts.filter(c => c.status === 'fully_signed').length}
-            </div>
-            <div className="text-sm text-muted-foreground">Signés</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-red-600">
-              {contracts.filter(c => c.status === 'expired').length}
-            </div>
-            <div className="text-sm text-muted-foreground">Expirés</div>
-          </CardContent>
-        </Card>
-      </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

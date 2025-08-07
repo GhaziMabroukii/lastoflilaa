@@ -24,6 +24,7 @@ import EditProperty from "./pages/EditProperty";
 import MapView from "./pages/MapView";
 import Offers from "./pages/Offers";
 import TenantRequestResponse from "./pages/TenantRequestResponse";
+import ContractVersions from "./pages/ContractVersions";
 
 const queryClient = new QueryClient();
 
@@ -47,6 +48,7 @@ const App = () => (
           <Route path="/contracts" component={ContractsDashboard} />
           <Route path="/create-contract" component={CreateContract} />
           <Route path="/contract/:id" component={ContractView} />
+          <Route path="/contract/:id/versions" component={ContractVersions} />
           <Route path="/profile" component={UserProfile} />
           <Route path="/edit-property/:id" component={EditProperty} />
           <Route path="/map" component={MapView} />
