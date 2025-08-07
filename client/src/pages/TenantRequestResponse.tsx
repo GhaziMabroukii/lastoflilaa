@@ -30,9 +30,11 @@ export default function TenantRequestResponse() {
   const [response, setResponse] = useState('');
   
   // Parse URL to get request type and ID
-  const urlParts = location.split('/');
-  const requestType = urlParts[2] as RequestType;
+  const requestType = params.type as RequestType;
   const requestId = parseInt(params.id || '0');
+  
+  console.log("TenantRequestResponse: URL params:", { type: params.type, id: params.id });
+  console.log("TenantRequestResponse: Parsed values:", { requestType, requestId });
 
   // Get current user
   const getUserData = () => {
